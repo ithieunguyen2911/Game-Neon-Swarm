@@ -1,9 +1,9 @@
 
 import { Vector2, ZoneType, WeaponType, PowerUpType, PlayerInput } from '../types';
-import { COLORS, PLAYER_SIZE, ZONE_CONFIGS, PLAYER_LIVES, PLAYER_SPEED, PLAYER_DRAG, CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
+import { COLORS, PLAYER_SIZE, ZONE_CONFIGS, PLAYER_LIVES, PLAYER_SPEED, PLAYER_DRAG, CANVAS_WIDTH, CANVAS_HEIGHT, WEAPON_CONFIGS } from '../constants';
 
-const drawOutline = (ctx: CanvasRenderingContext2D) => {
-    ctx.lineWidth = 3;
+const drawOutline = (ctx: CanvasRenderingContext2D, width: number = 3) => {
+    ctx.lineWidth = width;
     ctx.strokeStyle = 'black';
     ctx.stroke();
 }
@@ -68,9 +68,9 @@ export class Player extends Entity {
         this.velocity.x += (acc.x / len) * PLAYER_SPEED * dt * 10;
         this.velocity.y += (acc.y / len) * PLAYER_SPEED * dt * 10;
       }
-      const drag = ZONE_CONFIGS[zone]?.physics.drag || PLAYER_DRAG;
-      this.velocity.x *= drag;
-      this.velocity.y *= drag;
+      const zonePhys = (ZONE_CONFIGS as any)[zone]?.physics || { drag: PLAYER_DRAG };
+      this.velocity.x *= zonePhys.drag || PLAYER_DRAG;
+      this.velocity.y *= zonePhys.drag || PLAYER_DRAG;
     }
   }
 
@@ -80,7 +80,6 @@ export class Player extends Entity {
     const targetTilt = this.velocity.x * 0.001;
     this.tilt = this.tilt * 0.9 + targetTilt * 0.1;
 
-    // Constrain to screen
     this.position.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.position.x));
     this.position.y = Math.max(this.radius, Math.min(CANVAS_HEIGHT - this.radius, this.position.y));
   }
@@ -93,42 +92,30 @@ export class Player extends Entity {
     ctx.translate(this.position.x, this.position.y);
     ctx.rotate(this.tilt);
     
+    // Engine flame
     ctx.beginPath();
     const flicker = Math.random() * 5;
-    ctx.moveTo(-5, 15);
-    ctx.lineTo(0, 25 + flicker);
-    ctx.lineTo(5, 15);
-    ctx.fillStyle = '#f59e0b'; 
-    ctx.fill();
+    ctx.moveTo(-5, 15); ctx.lineTo(0, 25 + flicker); ctx.lineTo(5, 15);
+    ctx.fillStyle = '#f59e0b'; ctx.fill();
 
+    // Body
     ctx.beginPath();
     ctx.fillStyle = (this.color === COLORS.player2 ? '#16a34a' : '#ef4444'); 
-    ctx.moveTo(0, -10);
-    ctx.lineTo(-24, 24);
-    ctx.lineTo(24, 24);
-    ctx.closePath();
-    ctx.fill();
-    drawOutline(ctx);
+    ctx.moveTo(0, -10); ctx.lineTo(-24, 24); ctx.lineTo(24, 24); ctx.closePath();
+    ctx.fill(); drawOutline(ctx);
 
+    // Cockpit
     ctx.beginPath();
     ctx.fillStyle = '#e2e8f0'; 
     if (this.flashFrame > 0) ctx.fillStyle = 'white';
     ctx.ellipse(0, 5, 14, 22, 0, 0, Math.PI * 2);
-    ctx.fill();
-    drawOutline(ctx);
+    ctx.fill(); drawOutline(ctx);
 
+    // Core
     ctx.beginPath();
     ctx.fillStyle = this.color; 
     ctx.arc(0, 0, 9, 0, Math.PI * 2);
-    ctx.fill();
-    drawOutline(ctx);
-
-    ctx.beginPath();
-    ctx.fillStyle = 'white';
-    ctx.globalAlpha = 0.6;
-    ctx.arc(-3, -3, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1.0;
+    ctx.fill(); drawOutline(ctx);
     ctx.restore();
   }
 }
@@ -142,7 +129,11 @@ export class Bullet extends Entity {
   isEnemy: boolean; 
 
   constructor(pos: Vector2, vel: Vector2, type: WeaponType, color: string, damage: number, ownerId: string, isEnemy: boolean = false) {
-    const size = type === WeaponType.ROCKET ? 11 : (type === WeaponType.SHOTGUN ? 5 : 6);
+    let size = 6;
+    if (type === WeaponType.ROCKET) size = 12;
+    else if (type === WeaponType.SHOTGUN) size = 5;
+    else if (type === WeaponType.HELIX) size = 7;
+    
     super(pos, vel, size, color);
     this.type = type;
     this.damage = damage;
@@ -155,14 +146,14 @@ export class Bullet extends Entity {
     this.age += dt;
     if (this.type === WeaponType.HELIX) {
       const angle = Math.atan2(this.baseVelocity.y, this.baseVelocity.x);
-      const wave = Math.cos(this.age * 10) * 150;
+      const wave = Math.cos(this.age * 12) * 180; // Faster wave
       const perpX = -Math.sin(angle);
       const perpY = Math.cos(angle);
       this.velocity.x = this.baseVelocity.x + perpX * wave;
       this.velocity.y = this.baseVelocity.y + perpY * wave;
     } else if (this.type === WeaponType.ROCKET) {
-        this.velocity.x *= 1.02;
-        this.velocity.y *= 1.02;
+        this.velocity.x *= 1.03;
+        this.velocity.y *= 1.03;
     }
     super.update(dt);
   }
@@ -175,57 +166,54 @@ export class Bullet extends Entity {
 
     if (this.isEnemy) {
         ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 9, 11, 0, 0, Math.PI*2);
-        ctx.fill();
-        drawOutline(ctx);
-    } else if (this.type === WeaponType.ROCKET) {
-        ctx.fillStyle = this.color; 
-        ctx.beginPath();
-        ctx.moveTo(0, -17); ctx.lineTo(9, 6); ctx.lineTo(0, 3); ctx.lineTo(-9, 6);
-        ctx.closePath(); ctx.fill();
-        drawOutline(ctx);
-        if (Math.random() > 0.3) {
-            ctx.fillStyle = '#facc15';
-            ctx.beginPath(); ctx.moveTo(-4, 7); ctx.lineTo(0, 17); ctx.lineTo(4, 7); ctx.fill();
-        }
+        ctx.beginPath(); ctx.ellipse(0, 0, 9, 11, 0, 0, Math.PI*2); ctx.fill();
+        drawOutline(ctx, 2);
     } else {
-        ctx.rotate(-Math.PI/2); 
-        ctx.rotate(angle); 
-        ctx.fillStyle = this.color;
-        ctx.shadowBlur = 10;
+        // JUICY BULLET VISUALS
+        ctx.shadowBlur = 15;
         ctx.shadowColor = this.color;
-        ctx.beginPath();
+        
         if (this.type === WeaponType.BLASTER) {
-            if (ctx.roundRect) ctx.roundRect(-11, -5, 22, 9, 4);
-            else ctx.rect(-11, -5, 22, 9);
-        } else if (this.type === WeaponType.SHOTGUN) {
-            ctx.arc(0, 0, 6, 0, Math.PI*2);
-        } else {
-            this.drawStar(ctx, 0, 0, 5, 7, 4);
+            // Teardrop shape (Spec)
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, -this.radius, this.radius, Math.PI, 0); 
+            ctx.lineTo(0, this.radius * 2);
+            ctx.closePath();
+            ctx.fill();
+            // Core shine
+            ctx.fillStyle = 'white'; ctx.shadowBlur = 0;
+            ctx.beginPath(); ctx.ellipse(0, -this.radius * 0.4, this.radius * 0.4, this.radius * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+        } 
+        else if (this.type === WeaponType.SHOTGUN) {
+            // Glowing round pellets
+            ctx.fillStyle = this.color;
+            ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.shadowBlur = 0;
+            ctx.beginPath(); ctx.arc(0, 0, this.radius * 0.5, 0, Math.PI*2); ctx.fill();
         }
-        ctx.fill();
-        ctx.fillStyle = 'white';
-        ctx.shadowBlur = 0;
-        ctx.beginPath(); ctx.ellipse(0, 0, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+        else if (this.type === WeaponType.HELIX) {
+            // Plasma balls
+            const pulse = 1 + Math.sin(this.age * 20) * 0.2;
+            ctx.scale(pulse, pulse);
+            ctx.fillStyle = this.color;
+            ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.shadowBlur = 0;
+            ctx.beginPath(); ctx.ellipse(0, 0, this.radius * 0.4, this.radius * 0.7, 0, 0, Math.PI*2); ctx.fill();
+        }
+        else if (this.type === WeaponType.ROCKET) {
+            // Rocket body
+            ctx.fillStyle = '#475569';
+            ctx.fillRect(-this.radius/2, -this.radius, this.radius, this.radius * 2);
+            ctx.fillStyle = this.color; // Nose cone
+            ctx.beginPath(); ctx.moveTo(-this.radius/2, -this.radius); ctx.lineTo(0, -this.radius * 1.8); ctx.lineTo(this.radius/2, -this.radius); ctx.fill();
+            // Engine fire
+            const flicker = Math.random() * 8;
+            ctx.fillStyle = '#f97316';
+            ctx.beginPath(); ctx.moveTo(-this.radius/3, this.radius); ctx.lineTo(0, this.radius + 15 + flicker); ctx.lineTo(this.radius/3, this.radius); ctx.fill();
+        }
     }
     ctx.restore();
-  }
-
-  drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, spikes: number, outerRadius: number, innerRadius: number) {
-      let rot = Math.PI / 2 * 3;
-      let x = cx;
-      let y = cy;
-      let step = Math.PI / spikes;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - outerRadius);
-      for (let i = 0; i < spikes; i++) {
-          x = cx + Math.cos(rot) * outerRadius; y = cy + Math.sin(rot) * outerRadius;
-          ctx.lineTo(x, y); rot += step;
-          x = cx + Math.cos(rot) * innerRadius; y = cy + Math.sin(rot) * innerRadius;
-          ctx.lineTo(x, y); rot += step;
-      }
-      ctx.lineTo(cx, cy - outerRadius); ctx.closePath();
   }
 }
 
@@ -240,8 +228,7 @@ export class Enemy extends Entity {
   shootTimer: number;
 
   constructor(pos: Vector2, vel: Vector2, hp: number, size: number, zone: ZoneType) {
-    const color = ZONE_CONFIGS[zone].colors.enemy;
-    super(pos, vel, size, color);
+    super(pos, vel, size, '#ffffff');
     this.hp = hp;
     this.maxHp = hp;
     this.scoreValue = hp * 10;
@@ -253,56 +240,207 @@ export class Enemy extends Entity {
   update(dt: number) {
     super.update(dt);
     this.rotation += this.rotationSpeed * dt;
-    this.wingFlap += dt * 10; 
+    this.wingFlap += dt * 12; 
     this.shootTimer -= dt;
   }
 
   draw(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(this.position.x, this.position.y);
-    const wobble = Math.sin(this.rotation) * 0.2;
+    const wobble = Math.sin(this.rotation) * 0.15;
     ctx.rotate(wobble);
-    const baseColor = this.flashFrame > 0 ? '#ffffff' : (this.zone === ZoneType.SKY ? '#ffffff' : '#b45309');
-    ctx.scale(1.1, 1.1);
-    if (this.zone === ZoneType.SKY) this.drawSpaceChicken(ctx, baseColor);
-    else this.drawRoastedChicken(ctx, baseColor);
-    if (this.maxHp > 3 && this.hp < this.maxHp) {
-        ctx.rotate(-wobble);
-        ctx.fillStyle = 'black'; ctx.fillRect(-16, -30, 32, 6);
-        ctx.fillStyle = '#22c55e'; ctx.fillRect(-15, -29, 30 * (this.hp / this.maxHp), 4);
+    const baseColor = this.flashFrame > 0 ? '#ffffff' : (this.zone === ZoneType.VOLCANO ? '#f97316' : '#ffffff');
+    this.drawChibiChicken(ctx, baseColor);
+    ctx.restore();
+  }
+
+  protected drawChibiChicken(ctx: CanvasRenderingContext2D, color: string) {
+      const flap = Math.sin(this.wingFlap) * 7;
+      
+      // Feet - tiny orange ellipses
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath(); ctx.ellipse(-10, 18, 5, 3, 0, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+      ctx.beginPath(); ctx.ellipse(10, 18, 5, 3, 0, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+
+      // Wings - flapping
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.ellipse(-18, 4 + flap, 12, 8, -0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+      ctx.beginPath(); ctx.ellipse(18, 4 + flap, 12, 8, 0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+
+      // Body - Very round chibi style
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.ellipse(0, 0, 22, 24, 0, 0, Math.PI * 2); ctx.fill(); drawOutline(ctx, 3);
+
+      // Comb - three red spheres on top
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath(); ctx.arc(-6, -22, 6, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, -25, 7, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, -22, 6, 0, Math.PI*2); ctx.fill();
+
+      // Big Chibi Eyes
+      ctx.fillStyle = 'white';
+      ctx.beginPath(); ctx.arc(-8, -6, 8, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+      ctx.beginPath(); ctx.arc(8, -6, 8, 0, Math.PI*2); ctx.fill(); drawOutline(ctx, 2);
+      
+      // Pupils with reflection
+      ctx.fillStyle = 'black';
+      ctx.beginPath(); ctx.arc(-8, -6, 4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(8, -6, 4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'white';
+      ctx.beginPath(); ctx.arc(-10, -8, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, -8, 2, 0, Math.PI*2); ctx.fill();
+
+      // Beak - cute small triangle
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath(); ctx.moveTo(-6, 6); ctx.quadraticCurveTo(0, 16, 6, 6); ctx.quadraticCurveTo(0, 8, -6, 6);
+      ctx.fill(); drawOutline(ctx, 2);
+  }
+}
+
+export class Boss extends Enemy {
+  isVulnerable: boolean = false;
+  bossName: string;
+  stateTimer: number = 0;
+  maxHp: number;
+
+  constructor(pos: Vector2, hp: number, name: string, zone: ZoneType) {
+    super(pos, { x: 0, y: 0 }, hp, 130, zone);
+    this.bossName = name;
+    this.maxHp = hp;
+  }
+
+  update(dt: number) {
+    this.stateTimer += dt;
+    this.position.x = CANVAS_WIDTH / 2 + Math.sin(this.stateTimer * 0.8) * (CANVAS_WIDTH * 0.35);
+    this.position.y = 220 + Math.cos(this.stateTimer * 0.4) * 100;
+    super.update(dt);
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.translate(this.position.x, this.position.y);
+    ctx.scale(5, 5); 
+    const baseColor = this.flashFrame > 0 ? '#ffffff' : (this.isVulnerable ? '#ef4444' : '#475569');
+    
+    if (!this.isVulnerable) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+        ctx.arc(0, 0, 40, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 0.15; ctx.fillStyle = '#22d3ee'; ctx.fill(); ctx.globalAlpha = 1.0;
+    }
+
+    this.drawChibiChicken(ctx, baseColor);
+    
+    // Boss Crown - Gold
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath(); ctx.moveTo(-12, -28); ctx.lineTo(-18, -38); ctx.lineTo(-6, -32); ctx.lineTo(0, -45); ctx.lineTo(6, -32); ctx.lineTo(18, -38); ctx.lineTo(12, -28); ctx.fill();
+    drawOutline(ctx, 1);
+    
+    ctx.restore();
+    this.drawHpBar(ctx);
+  }
+
+  private drawHpBar(ctx: CanvasRenderingContext2D) {
+      const barWidth = 1200;
+      const x = (CANVAS_WIDTH - barWidth) / 2;
+      const y = 80;
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(x, y, barWidth, 32);
+      const hpRatio = this.hp / this.maxHp;
+      const grad = ctx.createLinearGradient(x, 0, x + barWidth, 0);
+      grad.addColorStop(0, '#ef4444'); grad.addColorStop(1, '#f87171');
+      ctx.fillStyle = this.isVulnerable ? '#ffffff' : grad;
+      ctx.fillRect(x + 4, y + 4, (barWidth - 8) * hpRatio, 24);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(x, y, barWidth, 32);
+      ctx.fillStyle = 'white'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(this.bossName, CANVAS_WIDTH / 2, y - 18);
+  }
+}
+
+export class PowerUp extends Entity {
+  rotation: number = 0;
+  kind: PowerUpType;
+  weaponType: WeaponType; 
+  sparkles: {x: number, y: number, life: number}[] = [];
+
+  constructor(pos: Vector2, kind: PowerUpType = PowerUpType.WEAPON) {
+    const types = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET];
+    const chosenType = types[Math.floor(Math.random() * types.length)];
+    const color = kind === PowerUpType.HEART ? '#ff4d4d' : WEAPON_CONFIGS[chosenType].color;
+    
+    super(pos, { x: 0, y: 80 }, 24, color);
+    this.kind = kind;
+    this.weaponType = chosenType;
+    for(let i=0; i<8; i++) this.sparkles.push({x: 0, y: 0, life: Math.random()});
+  }
+
+  update(dt: number) { 
+    super.update(dt); 
+    this.rotation += dt * 5; 
+    this.sparkles.forEach(p => {
+        p.life -= dt;
+        if(p.life <= 0) {
+            p.life = 1;
+            p.x = (Math.random() - 0.5) * 50;
+            p.y = (Math.random() - 0.5) * 50;
+        }
+    });
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.save(); 
+    ctx.translate(this.position.x, this.position.y);
+    const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
+    ctx.scale(pulse, pulse);
+
+    // Glow Outer Layer
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 40);
+    glow.addColorStop(0, this.color + '88');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 45, 0, Math.PI*2); ctx.fill();
+
+    // Small floating sparkles
+    this.sparkles.forEach(s => {
+        ctx.fillStyle = 'white'; ctx.globalAlpha = s.life * 0.7;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 2.5 * s.life, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+
+    if (this.kind === PowerUpType.HEART) {
+        this.drawGlowingHeart(ctx);
+    } else {
+        ctx.rotate(this.rotation * 0.1);
+        ctx.fillStyle = this.color; 
+        ctx.fillRect(-16, -16, 32, 32);
+        drawOutline(ctx, 3);
+        
+        // Shiny cross reflection
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
+        ctx.strokeRect(-12, -12, 24, 24);
+
+        ctx.rotate(-this.rotation * 0.1);
+        ctx.fillStyle = 'black'; ctx.font = 'bold 20px sans-serif'; 
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(this.weaponType[0], 0, 2);
     }
     ctx.restore();
   }
 
-  drawSpaceChicken(ctx: CanvasRenderingContext2D, color: string) {
-      const flap = Math.sin(this.wingFlap) * 5;
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.ellipse(-15, 5 + flap, 10, 6, -0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.ellipse(15, 5 + flap, 10, 6, 0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.ellipse(0, 0, 18, 22, 0, 0, Math.PI * 2); ctx.fill(); drawOutline(ctx);
-      this.drawEyes(ctx);
-      ctx.beginPath(); ctx.fillStyle = '#facc15'; ctx.moveTo(-5, 5); ctx.lineTo(5, 5); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.fillStyle = '#ef4444'; ctx.arc(0, -18, 5, 0, Math.PI*2); ctx.arc(-6, -16, 4, 0, Math.PI*2); ctx.arc(6, -16, 4, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-  }
-
-  drawRoastedChicken(ctx: CanvasRenderingContext2D, color: string) {
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.ellipse(0, 0, 18, 14, 0, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.ellipse(-10, -10, 6, 12, -0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.ellipse(10, -10, 6, 12, 0.5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.fillStyle = 'white';
-      ctx.beginPath(); ctx.arc(-6, 5, 5, 0, Math.PI*2); ctx.arc(6, 5, 5, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.strokeStyle = 'black'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-2, 4); ctx.moveTo(10, 0); ctx.lineTo(2, 4); ctx.stroke();
-      ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(-6, 5, 2, 0, Math.PI*2); ctx.arc(6, 5, 2, 0, Math.PI*2); ctx.fill();
-  }
-
-  drawEyes(ctx: CanvasRenderingContext2D) {
-      ctx.fillStyle = 'white';
-      ctx.beginPath(); ctx.arc(-6, -5, 6, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.beginPath(); ctx.arc(6, -5, 6, 0, Math.PI*2); ctx.fill(); drawOutline(ctx);
-      ctx.fillStyle = 'black';
-      ctx.beginPath(); ctx.arc(-6, -5, 2, 0, Math.PI*2); ctx.arc(6, -5, 2, 0, Math.PI*2); ctx.fill();
+  private drawGlowingHeart(ctx: CanvasRenderingContext2D) {
+      const grad = ctx.createRadialGradient(0, -5, 2, 0, 0, 20);
+      grad.addColorStop(0, '#ff9999'); grad.addColorStop(1, '#ff3333');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(0, 14);
+      ctx.bezierCurveTo(-20, -2, -20, -20, 0, -20);
+      ctx.bezierCurveTo(20, -20, 20, -2, 0, 14);
+      ctx.fill();
+      drawOutline(ctx, 3);
+      
+      // Top shine
+      ctx.fillStyle = 'white'; ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.ellipse(-6, -10, 5, 8, 0.4, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1.0;
   }
 }
 
@@ -316,59 +454,18 @@ export class Particle extends Entity {
   update(dt: number) { super.update(dt); this.life -= this.decay * dt; if (this.life <= 0) this.isDead = true; }
   draw(ctx: CanvasRenderingContext2D) {
     ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle = this.color;
-    ctx.beginPath(); ctx.ellipse(this.position.x, this.position.y, this.radius, this.radius * 0.6, Math.random(), 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1.0;
   }
 }
 
 export class BackgroundEntity extends Entity {
-    type: 'CLOUD' | 'EMBER';
-    constructor(pos: Vector2, vel: Vector2, size: number, color: string, type: 'CLOUD' | 'EMBER') {
+    constructor(pos: Vector2, vel: Vector2, size: number, color: string) {
         super(pos, vel, size, color);
-        this.type = type;
     }
     update(dt: number) { this.position.x += this.velocity.x * dt; this.position.y += this.velocity.y * dt; }
     draw(ctx: CanvasRenderingContext2D) {
-        if (this.type === 'CLOUD') {
-            const gradient = ctx.createRadialGradient(this.position.x, this.position.y, 0, this.position.x, this.position.y, this.radius);
-            gradient.addColorStop(0, this.color); gradient.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2); ctx.fill();
-        } else {
-            ctx.globalAlpha = 0.6 + Math.sin(Date.now()/100) * 0.4;
-            ctx.fillStyle = this.color; ctx.beginPath(); ctx.moveTo(this.position.x, this.position.y - this.radius); ctx.lineTo(this.position.x + this.radius, this.position.y); ctx.lineTo(this.position.x, this.position.y + this.radius); ctx.lineTo(this.position.x - this.radius, this.position.y); ctx.fill();
-            ctx.globalAlpha = 1;
-        }
+        ctx.fillStyle = this.color;
+        ctx.beginPath(); ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2); ctx.fill();
     }
-}
-
-export class PowerUp extends Entity {
-  rotation: number = 0;
-  kind: PowerUpType;
-  weaponType: WeaponType; 
-  constructor(pos: Vector2, kind: PowerUpType = PowerUpType.WEAPON) {
-    super(pos, { x: 0, y: 50 }, 18, COLORS.powerup);
-    this.kind = kind;
-    const types = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET];
-    this.weaponType = types[Math.floor(Math.random() * types.length)];
-  }
-  update(dt: number) { super.update(dt); this.rotation += dt * 2; }
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.save(); ctx.translate(this.position.x, this.position.y);
-    const scale = 1 + Math.sin(Date.now() / 150) * 0.1; ctx.scale(scale, scale); ctx.rotate(Math.sin(this.rotation) * 0.5);
-    if (this.kind === PowerUpType.HEART) {
-        ctx.fillStyle = '#ef4444'; ctx.strokeStyle = 'black'; ctx.lineWidth = 2; const size = 15;
-        ctx.beginPath(); ctx.moveTo(0, size * 0.5); ctx.bezierCurveTo(size, -size * 0.5, size * 2, size * 0.5, 0, size * 1.5); ctx.bezierCurveTo(-size * 2, size * 0.5, -size, -size * 0.5, 0, size * 0.5); ctx.fill(); ctx.stroke();
-    } else {
-        let color = '#facc15';
-        if (this.weaponType === WeaponType.SHOTGUN) color = '#22d3ee';
-        if (this.weaponType === WeaponType.HELIX) color = '#a855f7';
-        if (this.weaponType === WeaponType.ROCKET) color = '#f97316';
-        ctx.fillStyle = color; ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(-12, -12, 24, 24, 6); else ctx.rect(-12, -12, 24, 24);
-        ctx.fill(); drawOutline(ctx);
-        ctx.fillStyle = 'white'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('?', 0, 0);
-        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 25, 0, Math.PI * 2); ctx.stroke();
-    }
-    ctx.restore();
-  }
 }

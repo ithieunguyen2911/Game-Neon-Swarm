@@ -1,3 +1,4 @@
+
 export interface Vector2 {
   x: number;
   y: number;
@@ -6,10 +7,16 @@ export interface Vector2 {
 export enum GameState {
   MENU = 'MENU',
   PLAYING = 'PLAYING',
-  PAUSED = 'PAUSED', // Added Pause State
-  LEVEL_COMPLETE = 'LEVEL_COMPLETE',
+  PAUSED = 'PAUSED',
+  LEVEL_COMPLETE = 'LEVEL_COMPLETE', // Dùng để thông báo giữa các map
   GAME_OVER = 'GAME_OVER',
   SETTINGS = 'SETTINGS',
+}
+
+export enum MapPhase {
+  NORMAL = 'NORMAL',
+  ELITE = 'ELITE',
+  BOSS = 'BOSS'
 }
 
 export enum GameMode {
@@ -21,6 +28,9 @@ export enum GameMode {
 export enum ZoneType {
   SKY = 'SKY',
   VOLCANO = 'VOLCANO',
+  SPACE = 'SPACE',
+  CYBER = 'CYBER',
+  ICE = 'ICE'
 }
 
 export enum WeaponType {
@@ -33,12 +43,6 @@ export enum WeaponType {
 export enum PowerUpType {
   WEAPON = 'WEAPON',
   HEART = 'HEART'
-}
-
-export interface GameStats {
-  score: number;
-  level: number;
-  highScore: number;
 }
 
 export interface PlayerInput {
@@ -56,7 +60,6 @@ export interface InputState {
   p2: PlayerInput; 
 }
 
-// Control Configuration Types
 export interface PlayerKeyMap {
   up: string;
   down: string;
@@ -70,7 +73,6 @@ export interface ControlSettings {
   p2: PlayerKeyMap;
 }
 
-// Multiplayer Types
 export interface NetworkPlayerState {
   id: string;
   x: number;
@@ -79,11 +81,9 @@ export interface NetworkPlayerState {
   vy: number;
   tilt: number;
   weaponType: WeaponType;
+  weaponLevel: number;
   isShooting: boolean;
   color: string;
-}
-
-export interface NetworkEvent {
-  type: 'SCORE' | 'LEVEL_UP';
-  payload: any;
+  lives: number;
+  isDead: boolean;
 }
