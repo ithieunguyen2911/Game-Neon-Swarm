@@ -7,6 +7,13 @@ import { Play, RotateCcw, Trophy, MousePointer2, ArrowRight, Zap, Cloud, Flame, 
 
 const engine = new GameEngine();
 
+interface PlayerStateUI {
+    lives: number;
+    weaponLevel: number;
+    isDead: boolean;
+    active: boolean;
+}
+
 export const GameCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
@@ -14,10 +21,11 @@ export const GameCanvas: React.FC = () => {
   const [level, setLevel] = useState(1);
   const [timer, setTimer] = useState(0);
   const [highScore, setHighScore] = useState(engine.highScore);
-  const [weaponLevel, setWeaponLevel] = useState(1);
-  const [lives, setLives] = useState(5); 
-  const [playerDead, setPlayerDead] = useState(false); // Track if main player is dead
   
+  // Separate states for UI rendering
+  const [p1State, setP1State] = useState<PlayerStateUI>({ lives: 5, weaponLevel: 1, isDead: false, active: true });
+  const [p2State, setP2State] = useState<PlayerStateUI>({ lives: 5, weaponLevel: 1, isDead: false, active: false });
+
   // Controls State
   const [controls, setControls] = useState<ControlSettings>(DEFAULT_CONTROLS);
   const [rebinding, setRebinding] = useState<{ player: 'p1' | 'p2', action: keyof PlayerKeyMap } | null>(null);
@@ -77,11 +85,18 @@ export const GameCanvas: React.FC = () => {
       if (engine.score !== score) setScore(engine.score);
       if (engine.highScore !== highScore) setHighScore(engine.highScore);
       
-      const mainP = engine.mainPlayer;
-      if (mainP) {
-          if (mainP.weaponLevel !== weaponLevel) setWeaponLevel(mainP.weaponLevel);
-          if (mainP.lives !== lives) setLives(mainP.lives);
-          if (mainP.isDead !== playerDead) setPlayerDead(mainP.isDead);
+      // Update P1 UI State
+      const p1 = engine.players.get('p1');
+      if (p1) {
+          setP1State({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true });
+      }
+
+      // Update P2 UI State
+      const p2 = engine.players.get('p2');
+      if (p2) {
+          setP2State({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true });
+      } else {
+          setP2State(prev => ({ ...prev, active: false }));
       }
       
       if (engine.level !== level) setLevel(engine.level);
@@ -93,7 +108,7 @@ export const GameCanvas: React.FC = () => {
     animationFrameId = requestAnimationFrame(loop);
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameState, score, highScore, weaponLevel, level, lives, playerDead]);
+  }, [gameState, score, highScore, level]);
 
   // Handle Input with Dynamic Controls
   useEffect(() => {
@@ -258,41 +273,60 @@ export const GameCanvas: React.FC = () => {
       );
   }
 
+  const renderPlayerHUD = (state: PlayerStateUI, isLeft: boolean, label: string) => {
+      return (
+        <div className={`absolute bottom-6 ${isLeft ? 'left-6' : 'right-6'} flex flex-col ${isLeft ? 'items-start' : 'items-end'}`}>
+            <div className={`text-2xl font-black italic mb-1 ${isLeft ? 'text-blue-400' : 'text-green-400'}`}>
+                {label}
+            </div>
+            
+            {state.isDead ? (
+                <div className="flex flex-col items-center animate-bounce">
+                    <span className="flex items-center gap-2 text-red-500 font-bold mb-1">
+                        <Skull className="w-6 h-6" /> DESTROYED
+                    </span>
+                    {/* Only show revive hint if we are in Coop mode, assuming donor exists */}
+                    {p1State.active && p2State.active && (
+                       <span className="text-white bg-red-600 px-2 py-1 rounded text-xs font-bold">PRESS SHOOT TO REVIVE</span>
+                    )}
+                </div>
+            ) : (
+                <div className="flex gap-1 mb-2">
+                     {[...Array(5)].map((_, i) => (
+                        <Heart 
+                            key={i} 
+                            className={`w-6 h-6 ${i < state.lives ? 'text-red-500 fill-red-500' : 'text-neutral-800 fill-neutral-800'}`} 
+                        />
+                    ))}
+                </div>
+            )}
+            
+            {!state.isDead && (
+                <div className="flex gap-1">
+                    {[1,2,3,4,5].map(l => (
+                         <div key={l} className={`w-4 h-2 rounded-sm ${l <= state.weaponLevel ? (isLeft ? 'bg-blue-400' : 'bg-green-400') : 'bg-neutral-800'}`} />
+                    ))}
+                </div>
+            )}
+        </div>
+      );
+  };
+
   return (
     <div className="relative flex justify-center items-center h-screen bg-neutral-950">
       
-      {/* HUD */}
+      {/* HUD TOP */}
       {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
         <div className="absolute top-4 left-4 right-4 flex justify-between text-white pointer-events-none z-10 font-mono">
           <div className="flex flex-col gap-2">
             <div>
-                <span className="text-xs text-blue-400 font-bold block">SCORE</span>
-                <span className="text-2xl font-bold tracking-tight">{score.toLocaleString()}</span>
-            </div>
-            {/* Lives HUD */}
-            <div className="flex items-center gap-1">
-                {playerDead ? (
-                    <span className="flex items-center gap-2 text-red-500 font-bold animate-pulse">
-                        <Skull className="w-5 h-5" /> DESTROYED
-                    </span>
-                ) : (
-                    [...Array(5)].map((_, i) => (
-                        <Heart 
-                            key={i} 
-                            className={`w-5 h-5 ${i < lives ? 'text-red-500 fill-red-500' : 'text-neutral-800 fill-neutral-800'}`} 
-                        />
-                    ))
-                )}
+                <span className="text-xs text-neutral-400 font-bold block">SCORE</span>
+                <span className="text-2xl font-bold tracking-tight text-white">{score.toLocaleString()}</span>
             </div>
           </div>
           
           <div className="flex flex-col items-center">
-             <span className="text-3xl font-black italic text-neutral-700">{timer}</span>
-             {playerDead && engine.gameMode === GameMode.OFFLINE_COOP && (
-                 <div className="text-red-500 font-bold animate-pulse text-sm mt-1">
-                     PRESS SHOOT TO REVIVE
-                 </div>
-             )}
+             <span className="text-4xl font-black italic text-neutral-700">{timer}</span>
           </div>
 
           <div className="flex flex-col items-end">
@@ -303,14 +337,17 @@ export const GameCanvas: React.FC = () => {
                     {engine.gameMode.replace('OFFLINE_', '')}
                 </span>
              </div>
-             <div className="flex gap-1 mt-1">
-               {[1,2,3,4].map(l => (
-                 <div key={l} className={`w-3 h-3 rounded-sm ${l <= weaponLevel ? 'bg-yellow-400' : 'bg-neutral-800'}`} />
-               ))}
-             </div>
              <span className="text-xs text-neutral-500 mt-1">{ZONE_CONFIGS[engine.currentZone].name}</span>
           </div>
         </div>
+      )}
+
+      {/* HUD BOTTOM - PLAYER STATUS */}
+      {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
+          <div className="pointer-events-none z-10">
+              {p1State.active && renderPlayerHUD(p1State, true, "PLAYER 1")}
+              {p2State.active && renderPlayerHUD(p2State, false, "PLAYER 2")}
+          </div>
       )}
 
       {/* Main Canvas */}

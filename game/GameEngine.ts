@@ -325,7 +325,8 @@ export class GameEngine {
     if ((input.shooting || input.usePointer) && timer <= 0) {
       this.fireBulletForPlayer(p);
       const config = WEAPON_CONFIGS[p.weaponType];
-      const levelMod = p.weaponLevel * 0.01;
+      // Faster fire rate at higher levels
+      const levelMod = Math.min(0.1, p.weaponLevel * 0.02);
       timer = Math.max(0.05, config.fireRate - levelMod);
     }
     this.fireTimer.set(p.id, timer);
@@ -335,24 +336,45 @@ export class GameEngine {
     if (!p.isRemote) audio.playShoot(); 
     
     const wConfig = WEAPON_CONFIGS[p.weaponType];
-    const level = p.weaponLevel;
+    const level = p.weaponLevel; // 1 to MAX (5)
     const speed = wConfig.speed;
     const bulletColor = p.color === COLORS.player ? wConfig.color : p.color;
     
-    const dmg = wConfig.damage + (level * 0.2);
+    // Damage increases slightly per level
+    const dmg = wConfig.damage + ((level - 1) * 0.5);
     const shootY = p.position.y - 15; 
     const px = p.position.x;
 
     if (p.weaponType === WeaponType.BLASTER) {
+        // Level 1: 1 stream
+        // Level 2: 3 streams (narrow)
+        // Level 3: 3 streams (wide)
+        // Level 4: 5 streams
+        // Level 5: 7 streams (wall of fire)
+        const count = level === 1 ? 1 : (level === 2 ? 3 : (level === 3 ? 3 : (level === 4 ? 5 : 7)));
+        const spread = level === 2 ? 5 : 10;
+        
+        // Always have a center one
         this.bullets.push(new Bullet({x: px, y: shootY}, {x: 0, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
-        if (level >= 2) {
-             this.bullets.push(new Bullet({x: px - 10, y: shootY + 5}, {x: 0, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
-             this.bullets.push(new Bullet({x: px + 10, y: shootY + 5}, {x: 0, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+        
+        if (count >= 3) {
+            this.bullets.push(new Bullet({x: px - spread, y: shootY + 5}, {x: -20, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+            this.bullets.push(new Bullet({x: px + spread, y: shootY + 5}, {x: 20, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+        }
+        if (count >= 5) {
+            this.bullets.push(new Bullet({x: px - spread*2, y: shootY + 10}, {x: -40, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+            this.bullets.push(new Bullet({x: px + spread*2, y: shootY + 10}, {x: 40, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+        }
+        if (count >= 7) {
+            this.bullets.push(new Bullet({x: px - spread*3, y: shootY + 15}, {x: -80, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
+            this.bullets.push(new Bullet({x: px + spread*3, y: shootY + 15}, {x: 80, y: -speed}, WeaponType.BLASTER, bulletColor, dmg, p.id));
         }
     } 
     else if (p.weaponType === WeaponType.SHOTGUN) {
-        const count = 3 + level;
-        const arc = Math.PI / 3; 
+        // Massive spread increase
+        const count = 3 + (level * 2); // L1: 5, L2: 7, L3: 9...
+        const arc = Math.PI / (3.5 - (level * 0.2)); // Wider arc per level
+        
         for(let i=0; i<count; i++) {
             const angle = -Math.PI/2 - (arc/2) + (arc * (i/(count-1)));
             this.bullets.push(new Bullet(
@@ -364,19 +386,60 @@ export class GameEngine {
                 p.id
             ));
         }
-        if (!p.isRemote) this.screenShake += 2;
+        if (!p.isRemote) this.screenShake += (1 + level);
     }
     else if (p.weaponType === WeaponType.HELIX) {
+        // L1: 2 streams
+        // L2: 2 streams + 1 center
+        // L3: 4 streams
+        // L4: 4 streams + 1 center
+        // L5: 6 streams
+        
+        // Base Helix Pair
         this.bullets.push(new Bullet({x: px - 15, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, p.id));
         this.bullets.push(new Bullet({x: px + 15, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, p.id)); 
+        
+        if (level === 2 || level === 4 || level >= 5) {
+             // Center beam
+             this.bullets.push(new Bullet({x: px, y: shootY}, {x: 0, y: -speed*1.2}, WeaponType.BLASTER, '#ffffff', dmg, p.id));
+        }
+        
+        if (level >= 3) {
+             // Wide Helix Pair
+            this.bullets.push(new Bullet({x: px - 30, y: shootY+10}, {x: 0, y: -speed*0.9}, WeaponType.HELIX, bulletColor, dmg, p.id));
+            this.bullets.push(new Bullet({x: px + 30, y: shootY+10}, {x: 0, y: -speed*0.9}, WeaponType.HELIX, bulletColor, dmg, p.id)); 
+        }
+
+        if (level >= 5) {
+             // Extra Wide
+            this.bullets.push(new Bullet({x: px - 45, y: shootY+20}, {x: 0, y: -speed*0.8}, WeaponType.HELIX, bulletColor, dmg, p.id));
+            this.bullets.push(new Bullet({x: px + 45, y: shootY+20}, {x: 0, y: -speed*0.8}, WeaponType.HELIX, bulletColor, dmg, p.id)); 
+        }
     }
     else if (p.weaponType === WeaponType.ROCKET) {
+        // L1: 1
+        // L2: 3
+        // L3: 3 (homing/stronger)
+        // L4: 5
+        // L5: 7
+        
         // Center Rocket
         this.bullets.push(new Bullet({x: px, y: shootY}, {x: 0, y: -speed * 0.5}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
         
-        if (level >= 3) {
+        if (level >= 2) {
             this.bullets.push(new Bullet({x: px - 20, y: shootY + 10}, {x: -100, y: -speed * 0.5}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
             this.bullets.push(new Bullet({x: px + 20, y: shootY + 10}, {x: 100, y: -speed * 0.5}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
+        }
+
+        if (level >= 4) {
+             this.bullets.push(new Bullet({x: px - 40, y: shootY + 20}, {x: -200, y: -speed * 0.5}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
+             this.bullets.push(new Bullet({x: px + 40, y: shootY + 20}, {x: 200, y: -speed * 0.5}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
+        }
+
+        if (level >= 5) {
+             // Side firing rockets!
+             this.bullets.push(new Bullet({x: px - 40, y: shootY + 20}, {x: -400, y: -speed * 0.3}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
+             this.bullets.push(new Bullet({x: px + 40, y: shootY + 20}, {x: 400, y: -speed * 0.3}, WeaponType.ROCKET, bulletColor, dmg * 2, p.id));
         }
     }
   }
@@ -597,25 +660,10 @@ export class GameEngine {
     this.enemies.forEach(e => e.draw(ctx));
     this.bullets.forEach(b => b.draw(ctx));
     
-    // Draw players (even dead ones as ghosts if needed, or just handle normally)
+    // Draw players
     if (this.gameState !== GameState.GAME_OVER) {
         this.players.forEach(p => {
-             // If dead, maybe draw a "dead" icon or nothing. 
-             // Logic is handled in Player.draw, it returns if isDead is true.
              p.draw(ctx);
-             
-             // Draw Revival Hint if dead and co-op
-             if (p.isDead && this.localPlayerIds.length > 1) {
-                 ctx.save();
-                 ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
-                 ctx.font = "bold 20px monospace";
-                 ctx.textAlign = "center";
-                 // Approximate position or center screen
-                 const yPos = p.id === 'p1' ? CANVAS_HEIGHT - 50 : CANVAS_HEIGHT - 80;
-                 // But player position is lost when dead? No, entity keeps position.
-                 ctx.fillText("PRESS SHOOT TO REVIVE", p.position.x, p.position.y);
-                 ctx.restore();
-             }
         });
     }
 

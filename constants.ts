@@ -15,7 +15,7 @@ export const ENEMY_SPAWN_RATE_INITIAL = 0.8;
 export const ENEMY_BASE_SPEED = 150;
 export const ENEMY_SIZE = 40; // Increased from 35 (~14%)
 
-export const MAX_WEAPON_LEVEL = 4;
+export const MAX_WEAPON_LEVEL = 5; // Increased to 5 for massive power
 
 export const COLORS = {
   player: '#3b82f6', 
