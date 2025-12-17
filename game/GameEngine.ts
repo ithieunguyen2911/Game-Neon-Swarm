@@ -1,5 +1,5 @@
 
-import { Player, Bullet, Enemy, Boss, Particle, PowerUp, BackgroundEntity } from './Entities';
+import { Player, Bullet, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion } from './Entities';
 import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase } from '../types';
 import { 
   CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, ENEMY_SPAWN_RATE_INITIAL,
@@ -24,6 +24,7 @@ export class GameEngine {
   boss: Boss | null = null;
   particles: Particle[] = [];
   powerups: PowerUp[] = [];
+  explosions: Explosion[] = [];
   backgroundEntities: BackgroundEntity[] = [];
 
   fireTimer: Map<string, number> = new Map();
@@ -36,6 +37,14 @@ export class GameEngine {
     this.players.set('p1', new Player(CANVAS_WIDTH/2, CANVAS_HEIGHT - 100, 'p1', COLORS.player));
     const saved = localStorage.getItem('neon_swarm_highscore');
     if (saved) this.highScore = parseInt(saved, 10);
+  }
+
+  togglePause() {
+    if (this.gameState === GameState.PLAYING) {
+      this.gameState = GameState.PAUSED;
+    } else if (this.gameState === GameState.PAUSED) {
+      this.gameState = GameState.PLAYING;
+    }
   }
 
   startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0) {
@@ -55,6 +64,7 @@ export class GameEngine {
     this.boss = null;
     this.powerups = [];
     this.particles = [];
+    this.explosions = [];
     this.initEnvironment();
   }
 
@@ -108,6 +118,7 @@ export class GameEngine {
     }
 
     this.bullets.forEach(b => b.update(dt));
+    this.explosions.forEach(exp => exp.update(dt));
     this.enemies.forEach(e => {
         e.update(dt);
         if (e.shootTimer <= 0) {
@@ -181,14 +192,39 @@ export class GameEngine {
     timer -= dt;
     if (input.shooting && timer <= 0) {
       const newBullets = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.color);
+      
+      // LASER AUTO-FOCUS INJECTION
+      if (p.weaponType === WeaponType.LASER) {
+          newBullets.forEach(b => {
+             b.target = this.findNearestEnemy(b.position);
+          });
+      }
+
       this.bullets.push(...newBullets);
       audio.playShoot();
-      
-      // Sử dụng FireRate từ WeaponSystem để khớp với Hz của bảng 20 level
       const interval = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
       timer = interval;
     }
     this.fireTimer.set(p.id, timer);
+  }
+
+  private findNearestEnemy(pos: Vector2): Enemy | null {
+      let nearest: Enemy | null = null;
+      let minDist = 800; // Scanning range
+      
+      if (this.boss && !this.boss.isDead) return this.boss;
+
+      this.enemies.forEach(e => {
+          if (e.isDead || e.position.y < 0) return;
+          const dx = e.position.x - pos.x;
+          const dy = e.position.y - pos.y;
+          const d = Math.sqrt(dx*dx + dy*dy);
+          if (d < minDist) {
+              minDist = d;
+              nearest = e;
+          }
+      });
+      return nearest;
   }
 
   private spawnEnemy() {
@@ -203,16 +239,39 @@ export class GameEngine {
   }
 
   private checkCollisions() {
+    // 1. Bullets vs Enemies/Boss
     this.bullets.forEach(b => {
       if (!b.isEnemy) {
         this.enemies.forEach(e => {
           if (!e.isDead && this.isColliding(b, e)) {
-            b.isDead = true; e.hp -= b.damage; e.hit();
+            if (b.type === WeaponType.HELIX) {
+               b.pierceCount--;
+               if (b.pierceCount <= 0) b.isDead = true;
+               this.spawnVortexParticles(b.position, b.color, 5);
+            } else if (b.type === WeaponType.ROCKET) {
+               b.isDead = true;
+               this.createExplosion(b.position, b.damage * 0.8, 150); // AoE sát thương 80% dam gốc
+            } else {
+               b.isDead = true;
+            }
+            
+            e.hp -= b.damage; 
+            e.hit();
             if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
           }
         });
         if (this.boss && this.isColliding(b, this.boss)) {
-            b.isDead = true;
+            if (b.type === WeaponType.HELIX) {
+               b.pierceCount--;
+               if (b.pierceCount <= 0) b.isDead = true;
+               this.spawnVortexParticles(b.position, b.color, 5);
+            } else if (b.type === WeaponType.ROCKET) {
+               b.isDead = true;
+               this.createExplosion(b.position, b.damage * 0.8, 200);
+            } else {
+               b.isDead = true;
+            }
+
             if (this.boss.isVulnerable) {
                 this.boss.hp -= b.damage; this.boss.hit();
                 if (this.boss.hp <= 0) this.winMap();
@@ -230,6 +289,27 @@ export class GameEngine {
       }
     });
 
+    // 2. Explosions vs Enemies
+    this.explosions.forEach(exp => {
+        this.enemies.forEach(e => {
+            if (!e.isDead && !exp.damagedEnemies.has(e) && this.isColliding(exp, e)) {
+                e.hp -= exp.damage;
+                e.hit();
+                exp.damagedEnemies.add(e);
+                if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
+            }
+        });
+        if (this.boss && !exp.damagedEnemies.has(this.boss) && this.isColliding(exp, this.boss)) {
+            if (this.boss.isVulnerable) {
+                this.boss.hp -= exp.damage;
+                this.boss.hit();
+                exp.damagedEnemies.add(this.boss);
+                if (this.boss.hp <= 0) this.winMap();
+            }
+        }
+    });
+
+    // 3. Powerups vs Players
     this.powerups.forEach(pu => {
       this.players.forEach(p => {
         if (!p.isDead && !pu.isDead && this.isColliding(p, pu)) {
@@ -238,6 +318,13 @@ export class GameEngine {
         }
       });
     });
+  }
+
+  private createExplosion(pos: Vector2, damage: number, radius: number) {
+      this.explosions.push(new Explosion({...pos}, radius, damage));
+      this.screenShake = Math.max(this.screenShake, 25);
+      audio.playExplosion();
+      this.spawnParticles(pos, '#f97316', 15);
   }
 
   private winMap() {
@@ -261,7 +348,9 @@ export class GameEngine {
   }
 
   private killEnemy(e: Enemy) {
-    this.score += e.scoreValue; this.screenShake = 12; audio.playExplosion();
+    this.score += e.scoreValue; 
+    this.screenShake = Math.max(this.screenShake, 12); 
+    audio.playExplosion();
     this.spawnParticles(e.position, e.color, 20);
     if (Math.random() < 0.2) {
         const isHeart = Math.random() < 0.3;
@@ -293,9 +382,21 @@ export class GameEngine {
     }
   }
 
+  spawnVortexParticles(pos: Vector2, color: string, count: number) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 100 + Math.random() * 200;
+        const p = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 3.0, 3.5);
+        p.velocity.x += Math.sin(angle) * 100;
+        p.velocity.y += Math.cos(angle) * 100;
+        this.particles.push(p);
+    }
+  }
+
   cullEntities() {
     this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -100 && b.position.y < CANVAS_HEIGHT + 100);
     this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 250);
+    this.explosions = this.explosions.filter(exp => !exp.isDead);
     this.particles = this.particles.filter(p => !p.isDead);
     this.powerups = this.powerups.filter(p => !p.isDead);
   }
@@ -314,6 +415,7 @@ export class GameEngine {
     this.enemies.forEach(e => e.draw(ctx));
     this.boss?.draw(ctx);
     this.bullets.forEach(b => b.draw(ctx));
+    this.explosions.forEach(exp => exp.draw(ctx));
     this.players.forEach(p => p.draw(ctx));
     ctx.restore();
   }

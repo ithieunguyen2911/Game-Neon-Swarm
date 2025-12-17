@@ -9,7 +9,6 @@ interface WeaponStats {
   hz: number;
 }
 
-// Bảng thông số BLASTER (Đã cung cấp)
 const BLASTER_TABLE: Record<number, WeaponStats> = {
   1: { bullets: 1, damage: 10, hz: 5.0 }, 2: { bullets: 2, damage: 11, hz: 5.0 },
   3: { bullets: 3, damage: 12, hz: 5.0 }, 4: { bullets: 3, damage: 13, hz: 5.2 },
@@ -23,7 +22,6 @@ const BLASTER_TABLE: Record<number, WeaponStats> = {
   19: { bullets: 7, damage: 41, hz: 7.4 }, 20: { bullets: 7, damage: 45, hz: 7.6 },
 };
 
-// Bảng thông số SHOTGUN (Diện rộng, tốc độ tăng dần)
 const SHOTGUN_TABLE: Record<number, WeaponStats> = {
   1: { bullets: 3, damage: 6, hz: 1.8 }, 2: { bullets: 5, damage: 6.5, hz: 1.9 },
   3: { bullets: 7, damage: 7, hz: 2.0 }, 4: { bullets: 7, damage: 7.5, hz: 2.1 },
@@ -37,32 +35,44 @@ const SHOTGUN_TABLE: Record<number, WeaponStats> = {
   19: { bullets: 29, damage: 20, hz: 3.6 }, 20: { bullets: 31, damage: 22, hz: 3.8 },
 };
 
-// Bảng thông số HELIX (Nhanh, xuyên thấu nhẹ)
 const HELIX_TABLE: Record<number, WeaponStats> = {
-  1: { bullets: 2, damage: 4, hz: 8.0 }, 2: { bullets: 2, damage: 5, hz: 8.5 },
-  3: { bullets: 2, damage: 6, hz: 9.0 }, 4: { bullets: 4, damage: 6.5, hz: 9.5 },
-  5: { bullets: 4, damage: 7, hz: 10.0 }, 6: { bullets: 4, damage: 8, hz: 10.5 },
-  7: { bullets: 4, damage: 9, hz: 11.0 }, 8: { bullets: 4, damage: 10, hz: 11.5 },
-  9: { bullets: 6, damage: 11, hz: 12.0 }, 10: { bullets: 6, damage: 12, hz: 12.5 },
-  11: { bullets: 6, damage: 13, hz: 13.0 }, 12: { bullets: 6, damage: 15, hz: 13.5 },
-  13: { bullets: 6, damage: 17, hz: 14.0 }, 14: { bullets: 6, damage: 19, hz: 14.5 },
-  15: { bullets: 8, damage: 21, hz: 15.0 }, 16: { bullets: 8, damage: 23, hz: 15.5 },
-  17: { bullets: 8, damage: 25, hz: 16.0 }, 18: { bullets: 8, damage: 28, hz: 16.5 },
-  19: { bullets: 8, damage: 32, hz: 17.0 }, 20: { bullets: 10, damage: 36, hz: 18.0 },
+  1: { bullets: 2, damage: 8, hz: 4.0 }, 2: { bullets: 2, damage: 9, hz: 4.5 },
+  3: { bullets: 2, damage: 10, hz: 5.0 }, 4: { bullets: 4, damage: 11, hz: 5.5 },
+  5: { bullets: 4, damage: 12, hz: 6.0 }, 6: { bullets: 4, damage: 13, hz: 6.5 },
+  7: { bullets: 4, damage: 14, hz: 7.0 }, 8: { bullets: 4, damage: 15, hz: 7.5 },
+  9: { bullets: 6, damage: 17, hz: 8.0 }, 10: { bullets: 6, damage: 19, hz: 8.5 },
+  11: { bullets: 6, damage: 21, hz: 9.0 }, 12: { bullets: 6, damage: 24, hz: 9.5 },
+  13: { bullets: 6, damage: 27, hz: 10.0 }, 14: { bullets: 6, damage: 30, hz: 11.0 },
+  15: { bullets: 8, damage: 34, hz: 12.0 }, 16: { bullets: 8, damage: 38, hz: 13.0 },
+  17: { bullets: 8, damage: 42, hz: 14.0 }, 18: { bullets: 8, damage: 48, hz: 15.0 },
+  19: { bullets: 8, damage: 55, hz: 16.0 }, 20: { bullets: 10, damage: 65, hz: 18.0 },
 };
 
-// Bảng thông số ROCKET (Nổ mạnh, AOE)
 const ROCKET_TABLE: Record<number, WeaponStats> = {
-  1: { bullets: 1, damage: 40, hz: 1.2 }, 2: { bullets: 1, damage: 50, hz: 1.3 },
-  3: { bullets: 2, damage: 60, hz: 1.4 }, 4: { bullets: 2, damage: 70, hz: 1.5 },
-  5: { bullets: 2, damage: 80, hz: 1.6 }, 6: { bullets: 3, damage: 90, hz: 1.7 },
-  7: { bullets: 3, damage: 100, hz: 1.8 }, 8: { bullets: 3, damage: 115, hz: 1.9 },
-  9: { bullets: 4, damage: 130, hz: 2.0 }, 10: { bullets: 4, damage: 150, hz: 2.1 },
-  11: { bullets: 4, damage: 170, hz: 2.2 }, 12: { bullets: 5, damage: 190, hz: 2.3 },
-  13: { bullets: 5, damage: 220, hz: 2.4 }, 14: { bullets: 6, damage: 250, hz: 2.5 },
-  15: { bullets: 6, damage: 280, hz: 2.6 }, 16: { bullets: 7, damage: 320, hz: 2.7 },
-  17: { bullets: 8, damage: 360, hz: 2.8 }, 18: { bullets: 9, damage: 400, hz: 3.0 },
-  19: { bullets: 10, damage: 450, hz: 3.2 }, 20: { bullets: 12, damage: 500, hz: 3.5 },
+  1: { bullets: 1, damage: 45, hz: 1.2 }, 2: { bullets: 1, damage: 55, hz: 1.3 },
+  3: { bullets: 2, damage: 65, hz: 1.4 }, 4: { bullets: 2, damage: 75, hz: 1.5 },
+  5: { bullets: 2, damage: 85, hz: 1.6 }, 6: { bullets: 3, damage: 95, hz: 1.7 },
+  7: { bullets: 3, damage: 110, hz: 1.8 }, 8: { bullets: 3, damage: 125, hz: 1.9 },
+  9: { bullets: 4, damage: 140, hz: 2.0 }, 10: { bullets: 4, damage: 160, hz: 2.1 },
+  11: { bullets: 4, damage: 180, hz: 2.2 }, 12: { bullets: 5, damage: 200, hz: 2.3 },
+  13: { bullets: 5, damage: 230, hz: 2.4 }, 14: { bullets: 6, damage: 260, hz: 2.5 },
+  15: { bullets: 6, damage: 300, hz: 2.6 }, 16: { bullets: 7, damage: 340, hz: 2.7 },
+  17: { bullets: 8, damage: 380, hz: 2.8 }, 18: { bullets: 9, damage: 430, hz: 3.0 },
+  19: { bullets: 10, damage: 480, hz: 3.2 }, 20: { bullets: 12, damage: 550, hz: 3.5 },
+};
+
+const LASER_TABLE: Record<number, WeaponStats> = {
+  // Sát thương LASER thấp hơn một chút vì khả năng homing cực mạnh, bắn liên tục (HZ cao)
+  1: { bullets: 1, damage: 1.5, hz: 25 }, 2: { bullets: 1, damage: 1.8, hz: 28 },
+  3: { bullets: 1, damage: 2.2, hz: 30 }, 4: { bullets: 1, damage: 2.5, hz: 32 },
+  5: { bullets: 1, damage: 3.0, hz: 35 }, 6: { bullets: 1, damage: 3.5, hz: 38 },
+  7: { bullets: 1, damage: 4.2, hz: 40 }, 8: { bullets: 1, damage: 5.0, hz: 42 },
+  9: { bullets: 1, damage: 6.0, hz: 45 }, 10: { bullets: 1, damage: 7.5, hz: 50 },
+  11: { bullets: 1, damage: 9.0, hz: 52 }, 12: { bullets: 1, damage: 11, hz: 54 },
+  13: { bullets: 1, damage: 13, hz: 56 }, 14: { bullets: 1, damage: 16, hz: 58 },
+  15: { bullets: 1, damage: 19, hz: 60 }, 16: { bullets: 1, damage: 23, hz: 62 },
+  17: { bullets: 1, damage: 27, hz: 64 }, 18: { bullets: 1, damage: 32, hz: 66 },
+  19: { bullets: 1, damage: 38, hz: 68 }, 20: { bullets: 1, damage: 48, hz: 70 },
 };
 
 export class WeaponSystem {
@@ -71,6 +81,7 @@ export class WeaponSystem {
       case WeaponType.SHOTGUN: return SHOTGUN_TABLE;
       case WeaponType.HELIX: return HELIX_TABLE;
       case WeaponType.ROCKET: return ROCKET_TABLE;
+      case WeaponType.LASER: return LASER_TABLE;
       default: return BLASTER_TABLE;
     }
   }
@@ -95,18 +106,16 @@ export class WeaponSystem {
     
     const bullets: Bullet[] = [];
     const speed = wConfig.speed;
-    const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (playerColor === COLORS.player ? wConfig.color : playerColor);
+    const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.player ? wConfig.color : playerColor)));
     const shootY = py - 15;
     const count = stats.bullets;
     const dmg = stats.damage;
 
     if (type === WeaponType.BLASTER) {
-      // Mẫu bắn BLASTER (Giữ nguyên logic tia spread cũ nhưng dùng stats động)
       this.spawnBlasterPattern(bullets, px, shootY, count, dmg, speed, bulletColor, playerId);
     } 
     else if (type === WeaponType.SHOTGUN) {
-      // Mẫu bắn SHOTGUN: Càng cao càng rộng và dày
-      const arc = (Math.PI / 1.5) * (count / 31); // Arc mở rộng tối đa 120 độ
+      const arc = (Math.PI / 1.5) * (count / 31);
       for(let i=0; i<count; i++) {
         const angle = -Math.PI/2 - (arc/2) + (arc * (i/(count-1 || 1)));
         bullets.push(new Bullet(
@@ -117,16 +126,18 @@ export class WeaponSystem {
       }
     }
     else if (type === WeaponType.HELIX) {
-      // Mẫu bắn HELIX: Nhiều luồng xoắn ốc đối xứng
-      const spacing = 15;
-      for (let i = 0; i < count / 2; i++) {
-          const offset = (i + 1) * spacing;
-          bullets.push(new Bullet({x: px - offset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId));
-          bullets.push(new Bullet({x: px + offset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId)); 
+      const pairs = count / 2;
+      const spacing = 35;
+      for (let i = 0; i < pairs; i++) {
+          const xOffset = (i - (pairs - 1) / 2) * spacing;
+          const b1 = new Bullet({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId);
+          b1.phase = 0;
+          const b2 = new Bullet({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId);
+          b2.phase = Math.PI; 
+          bullets.push(b1, b2);
       }
     }
     else if (type === WeaponType.ROCKET) {
-      // Mẫu bắn ROCKET: Bắn theo hàng ngang hoặc hình quạt nhẹ
       const spreadX = 40;
       for (let i = 0; i < count; i++) {
           const xOffset = (i - (count - 1) / 2) * spreadX;
@@ -134,14 +145,18 @@ export class WeaponSystem {
           bullets.push(rocket);
       }
     }
+    else if (type === WeaponType.LASER) {
+      const width = 6 + (level * 1.5);
+      const laser = new Bullet({x: px, y: shootY}, {x: 0, y: -speed}, WeaponType.LASER, bulletColor, dmg, playerId);
+      laser.width = width;
+      bullets.push(laser);
+    }
     return bullets;
   }
 
   private static spawnBlasterPattern(bullets: Bullet[], px: number, py: number, count: number, dmg: number, speed: number, color: string, id: string) {
       switch (count) {
-        case 1:
-          bullets.push(new Bullet({x: px, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          break;
+        case 1: bullets.push(new Bullet({x: px, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id)); break;
         case 2:
           bullets.push(new Bullet({x: px - 12, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
           bullets.push(new Bullet({x: px + 12, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));

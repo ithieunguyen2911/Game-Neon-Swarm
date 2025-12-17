@@ -8,7 +8,7 @@ export enum GameState {
   MENU = 'MENU',
   PLAYING = 'PLAYING',
   PAUSED = 'PAUSED',
-  LEVEL_COMPLETE = 'LEVEL_COMPLETE', // Dùng để thông báo giữa các map
+  LEVEL_COMPLETE = 'LEVEL_COMPLETE',
   GAME_OVER = 'GAME_OVER',
   SETTINGS = 'SETTINGS',
 }
@@ -38,6 +38,7 @@ export enum WeaponType {
   SHOTGUN = 'SHOTGUN',
   HELIX = 'HELIX',
   ROCKET = 'ROCKET', 
+  LASER = 'LASER'
 }
 
 export enum PowerUpType {

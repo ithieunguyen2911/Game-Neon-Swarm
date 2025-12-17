@@ -1,9 +1,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { GameEngine } from '../game/GameEngine';
-import { MAP_PROGRESSION, DEFAULT_CONTROLS } from '../constants';
+import { MAP_PROGRESSION, DEFAULT_CONTROLS, MAX_WEAPON_LEVEL } from '../constants';
 import { GameState, GameMode, WeaponType } from '../types';
-import { Play, RotateCcw, Trophy, Users, User, Heart, Target, Skull, Zap } from 'lucide-react';
+import { Play, RotateCcw, Trophy, Users, User, Heart, Target, Skull, Zap, Pause } from 'lucide-react';
 import { InputHandler } from '../game/InputHandler';
 
 const engine = new GameEngine();
@@ -35,6 +35,15 @@ export const GameCanvas: React.FC = () => {
 
     inputHandlerRef.current = new InputHandler(DEFAULT_CONTROLS, canvas);
 
+    // Escape Key Listener for Pause
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.code === 'Escape') {
+            engine.togglePause();
+            setGameState(engine.gameState);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     let animationFrameId: number;
     const loop = () => {
       engine.update(1/60, inputHandlerRef.current!.state);
@@ -56,7 +65,10 @@ export const GameCanvas: React.FC = () => {
     };
 
     animationFrameId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+        cancelAnimationFrame(animationFrameId);
+        window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const currentMap = MAP_PROGRESSION[mapIdx] || MAP_PROGRESSION[0];
@@ -93,19 +105,24 @@ export const GameCanvas: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-3">
-                    <Zap className={`w-5 h-5 ${isLeft ? 'text-blue-400' : 'text-green-400'}`} />
-                    <div className="flex gap-1.5">
-                        {[1, 2, 3, 4, 5].map(l => (
-                            <div 
-                                key={l} 
-                                className={`w-6 h-3 rounded-full transition-all ${l <= state.weaponLevel ? (isLeft ? 'bg-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.8)]' : 'bg-green-400 shadow-[0_0_12px_rgba(34,197,94,0.8)]') : 'bg-neutral-800'}`} 
-                            />
-                        ))}
+                <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-3">
+                        <Zap className={`w-5 h-5 ${isLeft ? 'text-blue-400' : 'text-green-400'}`} />
+                        <div className="flex gap-0.5">
+                            {[...Array(MAX_WEAPON_LEVEL)].map((_, i) => {
+                                const l = i + 1;
+                                return (
+                                    <div 
+                                        key={l} 
+                                        className={`w-2.5 h-4 rounded-sm transition-all ${l <= state.weaponLevel ? (isLeft ? 'bg-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.8)]' : 'bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.8)]') : 'bg-neutral-800'}`} 
+                                    />
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-                <div className="mt-2 text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em]">
-                    {state.weaponType} Lvl.{state.weaponLevel}
+                    <div className={`${isLeft ? 'text-left' : 'text-right'} text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em]`}>
+                        {state.weaponType} OVERDRIVE Lvl.{state.weaponLevel}
+                    </div>
                 </div>
             </>
         )}
@@ -116,16 +133,13 @@ export const GameCanvas: React.FC = () => {
     <div className="relative w-full h-screen flex items-center justify-center bg-black overflow-hidden font-sans">
       <canvas ref={canvasRef} width={1920} height={1080} className="max-w-full max-h-full object-contain" />
 
-      {/* Playing HUD */}
-      {gameState === GameState.PLAYING && (
+      {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
         <>
-          {/* Top Bar Left */}
           <div className="absolute top-8 left-8 text-white font-black italic z-10">
             <div className="text-blue-400 text-sm tracking-widest mb-1">MISSION SECTOR {mapIdx + 1}/10</div>
             <div className="text-6xl tracking-tighter drop-shadow-2xl">{currentMap.name}</div>
           </div>
 
-          {/* Top Bar Right */}
           <div className="absolute top-8 right-8 text-white text-right font-black italic z-10">
             <div className="text-neutral-500 text-sm tracking-widest mb-1 uppercase">WORLD RECORD: {highScore.toLocaleString()}</div>
             <div className="text-7xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-400 leading-none drop-shadow-2xl">
@@ -133,7 +147,6 @@ export const GameCanvas: React.FC = () => {
             </div>
           </div>
 
-          {/* Boss Strategy Insight */}
           {engine.boss && (
             <div className="absolute top-44 left-1/2 -translate-x-1/2 w-[600px] text-center z-10 animate-in fade-in slide-in-from-top duration-700">
                 <div className="text-cyan-400 text-sm font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3 mb-3">
@@ -145,13 +158,34 @@ export const GameCanvas: React.FC = () => {
             </div>
           )}
 
-          {/* Players HUD */}
           {renderPlayerHUD(p1HUD, true, "PLAYER 1")}
           {p2HUD.active && renderPlayerHUD(p2HUD, false, "PLAYER 2")}
         </>
       )}
 
-      {/* Main Menu */}
+      {gameState === GameState.PAUSED && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center z-50 animate-in fade-in duration-300">
+            <div className="flex items-center gap-4 text-white mb-12">
+                <Pause className="w-16 h-16 text-blue-400 fill-blue-400" />
+                <h2 className="text-8xl font-black italic tracking-tighter">PAUSED</h2>
+            </div>
+            <div className="flex flex-col gap-6">
+                <button 
+                    onClick={() => engine.togglePause()}
+                    className="flex items-center justify-center gap-4 bg-blue-600 text-white px-20 py-6 rounded-2xl font-black text-3xl hover:bg-blue-500 transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(59,130,246,0.4)]"
+                >
+                    <Play className="w-8 h-8 fill-white" /> RESUME MISSION
+                </button>
+                <button 
+                    onClick={() => engine.stopGame()}
+                    className="flex items-center justify-center gap-4 bg-neutral-900 border border-neutral-700 text-neutral-400 px-20 py-6 rounded-2xl font-black text-2xl hover:bg-neutral-800 transition-all"
+                >
+                    <RotateCcw className="w-6 h-6" /> QUIT TO MENU
+                </button>
+            </div>
+        </div>
+      )}
+
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-40 p-8">
           <div className="relative mb-16">
@@ -190,7 +224,6 @@ export const GameCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Game Over */}
       {gameState === GameState.GAME_OVER && (
         <div className="absolute inset-0 bg-red-950/98 flex flex-col items-center justify-center text-white z-50 animate-in fade-in duration-1000">
           <div className="text-red-500 mb-6 animate-bounce drop-shadow-[0_0_30px_rgba(239,68,68,0.5)]"><Skull className="w-28 h-28" /></div>
@@ -209,7 +242,6 @@ export const GameCanvas: React.FC = () => {
         </div>
       )}
 
-      {/* Level Complete (Victory) */}
       {gameState === GameState.LEVEL_COMPLETE && (
         <div className="absolute inset-0 bg-blue-600/98 flex flex-col items-center justify-center text-white z-50">
           <Trophy className="w-40 h-40 text-yellow-400 mb-10 animate-bounce drop-shadow-[0_0_60px_rgba(250,204,21,0.6)]" />

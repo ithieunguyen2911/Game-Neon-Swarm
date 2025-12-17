@@ -5,7 +5,7 @@ export const CANVAS_WIDTH = 1920;
 export const CANVAS_HEIGHT = 1080;
 
 export const PLAYER_SPEED = 500;
-export const PLAYER_SIZE = 36;
+export const PLAYER_SIZE = 200; // Tăng từ 36 (+20%)
 export const PLAYER_DRAG = 0.92;
 export const PLAYER_LIVES = 5;
 
@@ -14,9 +14,8 @@ export const FIRE_RATE_BASE = 0.15;
 
 export const ENEMY_SPAWN_RATE_INITIAL = 0.8; 
 export const ENEMY_BASE_SPEED = 150;
-export const ENEMY_SIZE = 40;
+export const ENEMY_SIZE = 55; // Tăng từ 40 (+20%)
 
-// Cập nhật giới hạn level mới
 export const MAX_WEAPON_LEVEL = 20;
 
 export const COLORS = {
@@ -54,11 +53,11 @@ export const MAP_PROGRESSION: MapConfig[] = [
 ];
 
 export const WEAPON_CONFIGS = {
-  // Cập nhật damage cơ bản (Lv1) thành 10
   BLASTER: { name: "Egg Blaster", fireRate: 0.2, speed: 1100, damage: 10, color: '#38bdf8' },
   SHOTGUN: { name: "Feather Spreader", fireRate: 0.6, speed: 700, damage: 0.8, color: '#22d3ee' }, 
   HELIX: { name: "DNA Twister", fireRate: 0.1, speed: 600, damage: 0.6, color: '#a855f7' }, 
   ROCKET: { name: "Rooster Rocket", fireRate: 0.8, speed: 500, damage: 5, color: '#f97316' }, 
+  LASER: { name: "Photon Beam", fireRate: 0.05, speed: 4000, damage: 2, color: '#22c55e' }, 
 };
 
 export const ZONE_CONFIGS = {
