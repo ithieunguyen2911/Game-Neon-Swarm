@@ -78,7 +78,8 @@ export const GameCanvas: React.FC = () => {
       }
 
       // Sync React State with Engine
-      if (engine.gameState !== gameState && gameState !== GameState.SETTINGS && gameState !== GameState.PAUSED) {
+      // REMOVED: gameState !== GameState.PAUSED check which was causing the override bug
+      if (engine.gameState !== gameState && gameState !== GameState.SETTINGS) {
            setGameState(engine.gameState);
       }
       
@@ -140,6 +141,7 @@ export const GameCanvas: React.FC = () => {
               engine.gameState = GameState.PLAYING;
           } else if (gameState === GameState.SETTINGS) {
               setGameState(GameState.MENU); // Back to menu from settings
+              engine.gameState = GameState.MENU;
           }
           return;
       }
@@ -245,6 +247,11 @@ export const GameCanvas: React.FC = () => {
       // Logic for keeping weapon is handled in GameEngine.startGame (resetScore = false)
       engine.startGame(engine.gameMode, zone, false); 
       setGameState(GameState.PLAYING);
+  };
+
+  const handleQuitToMenu = () => {
+      engine.stopGame();
+      setGameState(GameState.MENU);
   };
 
   const formatKey = (code: string) => {
@@ -368,7 +375,7 @@ export const GameCanvas: React.FC = () => {
            </div>
            <p className="text-neutral-400 font-mono">PRESS [ESC] TO RESUME</p>
            <button 
-                onClick={() => setGameState(GameState.MENU)}
+                onClick={handleQuitToMenu}
                 className="mt-8 px-6 py-3 border border-neutral-600 rounded hover:bg-neutral-800 transition-colors"
            >
                QUIT TO MENU
@@ -533,7 +540,7 @@ export const GameCanvas: React.FC = () => {
 
           <div className="flex gap-4">
               <button 
-                onClick={() => setGameState(GameState.MENU)}
+                onClick={handleQuitToMenu}
                 className="px-8 py-4 bg-neutral-800 text-white hover:bg-neutral-700 font-bold rounded-lg transition-all"
               >
                 MAIN MENU

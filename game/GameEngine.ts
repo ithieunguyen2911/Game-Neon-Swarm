@@ -123,6 +123,15 @@ export class GameEngine {
     this.initEnvironment();
   }
 
+  stopGame() {
+    this.gameState = GameState.MENU;
+    this.bullets = [];
+    this.enemies = [];
+    this.powerups = [];
+    this.particles = [];
+    // Keep environment and players for background visual
+  }
+
   initEnvironment() {
     const config = ZONE_CONFIGS[this.currentZone] || ZONE_CONFIGS.SKY; // Safety fallback
     for(let i=0; i<8; i++) {
