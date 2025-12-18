@@ -106,7 +106,8 @@ export class WeaponSystem {
     
     const bullets: Bullet[] = [];
     const speed = wConfig.speed;
-    const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.player ? wConfig.color : playerColor)));
+    // Fix: Changed COLORS.player to COLORS.p1Primary as COLORS.player does not exist.
+    const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.p1Primary ? wConfig.color : playerColor)));
     const shootY = py - 15;
     const count = stats.bullets;
     const dmg = stats.damage;

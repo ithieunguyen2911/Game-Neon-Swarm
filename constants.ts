@@ -5,7 +5,7 @@ export const CANVAS_WIDTH = 1920;
 export const CANVAS_HEIGHT = 1080;
 
 export const PLAYER_SPEED = 500;
-export const PLAYER_SIZE = 200; // Tăng từ 36 (+20%)
+export const PLAYER_SIZE = 50; 
 export const PLAYER_DRAG = 0.92;
 export const PLAYER_LIVES = 5;
 
@@ -14,15 +14,26 @@ export const FIRE_RATE_BASE = 0.15;
 
 export const ENEMY_SPAWN_RATE_INITIAL = 0.8; 
 export const ENEMY_BASE_SPEED = 150;
-export const ENEMY_SIZE = 55; // Tăng từ 40 (+20%)
+export const ENEMY_SIZE = 55; 
 
 export const MAX_WEAPON_LEVEL = 20;
 
 export const COLORS = {
-  player: '#3b82f6', 
-  player2: '#22c55e', 
+  p1Primary: '#3b82f6', 
+  p1Glow: '#22d3ee',
+  p2Primary: '#10b981', 
+  p2Glow: '#34d399',
   powerup: '#fbbf24',
 };
+
+export const COLOR_PALETTE = [
+  { primary: '#3b82f6', glow: '#22d3ee', name: 'Neon Blue' },
+  { primary: '#10b981', glow: '#34d399', name: 'Emerald' },
+  { primary: '#f43f5e', glow: '#fb7185', name: 'Crimson' },
+  { primary: '#a855f7', glow: '#c084fc', name: 'Gravity Purple' },
+  { primary: '#f59e0b', glow: '#fbbf24', name: 'Solar Gold' },
+  { primary: '#64748b', glow: '#94a3b8', name: 'Steel' },
+];
 
 export const DEFAULT_CONTROLS: ControlSettings = {
   p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', shoot: 'KeyF' },

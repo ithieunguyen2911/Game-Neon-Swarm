@@ -2,9 +2,9 @@
 import { Vector2, ZoneType, WeaponType, PowerUpType, PlayerInput } from '../types';
 import { COLORS, PLAYER_SIZE, ZONE_CONFIGS, PLAYER_LIVES, PLAYER_SPEED, PLAYER_DRAG, CANVAS_WIDTH, CANVAS_HEIGHT, WEAPON_CONFIGS } from '../constants';
 
-const drawOutline = (ctx: CanvasRenderingContext2D, width: number = 2.5) => {
+const drawOutline = (ctx: CanvasRenderingContext2D, width: number = 2.5, color: string = '#020617') => {
     ctx.lineWidth = width;
-    ctx.strokeStyle = '#020617'; // Viền xanh đen đậm cực sắc nét
+    ctx.strokeStyle = color;
     ctx.stroke();
 }
 
@@ -43,11 +43,15 @@ export class Player extends Entity {
   lives: number = PLAYER_LIVES; 
   tilt: number = 0; 
   id: string;
-  idleTimer: number = 0; // Dùng cho hiệu ứng nhấp nhô
+  idleTimer: number = 0;
+  primaryColor: string;
+  glowColor: string;
 
-  constructor(x: number, y: number, id: string = 'local', color: string = COLORS.player) {
-    super({ x, y }, { x: 0, y: 0 }, PLAYER_SIZE, color);
+  constructor(x: number, y: number, id: string, primaryColor: string, glowColor: string) {
+    super({ x, y }, { x: 0, y: 0 }, PLAYER_SIZE, primaryColor);
     this.id = id;
+    this.primaryColor = primaryColor;
+    this.glowColor = glowColor;
   }
 
   handleInput(dt: number, input: PlayerInput, zone: ZoneType) {
@@ -80,7 +84,6 @@ export class Player extends Entity {
     this.idleTimer += dt;
     if (this.invulnerableTime > 0) this.invulnerableTime -= dt;
     
-    // Smooth Tilt
     const targetTilt = (this.velocity.x * 0.001);
     this.tilt = this.tilt * 0.85 + targetTilt * 0.15;
 
@@ -93,14 +96,27 @@ export class Player extends Entity {
     if (this.invulnerableTime > 0 && Math.floor(Date.now() / 50) % 2 === 0) return;
     
     ctx.save();
-    
-    // Idle bobbing effect
     const bobbing = Math.sin(this.idleTimer * 4) * 2;
     ctx.translate(this.position.x, this.position.y + bobbing);
     ctx.rotate(this.tilt);
-    ctx.scale(1.2, 1.2); // Maintain the size scale
+    ctx.scale(1.3, 1.3);
 
-    this.drawEngine(ctx);
+    // Afterburner flames
+    this.drawAfterburners(ctx);
+
+    // Overdrive Aura for High Level
+    if (this.weaponLevel >= 15) {
+        ctx.save();
+        ctx.globalAlpha = 0.15 + Math.sin(this.idleTimer * 12) * 0.08;
+        ctx.shadowBlur = 40;
+        ctx.shadowColor = this.glowColor;
+        ctx.fillStyle = this.glowColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, 48, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     this.drawShipBody(ctx);
     this.drawCore(ctx);
     this.drawWeaponBarrels(ctx);
@@ -108,108 +124,88 @@ export class Player extends Entity {
     ctx.restore();
   }
 
-  private drawEngine(ctx: CanvasRenderingContext2D) {
-      const flicker = Math.random() * 6;
-      const isHighLevel = this.weaponLevel >= 15;
-      const engineColor = isHighLevel ? '#38bdf8' : '#f59e0b';
+  private drawAfterburners(ctx: CanvasRenderingContext2D) {
+      const flicker = Math.random() * 15;
+      ctx.fillStyle = '#f97316';
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#f97316';
       
-      ctx.fillStyle = engineColor;
+      // Left Engine Flame
+      ctx.beginPath();
+      ctx.moveTo(-16, 12); ctx.lineTo(-12, 12); ctx.lineTo(-14, 25 + flicker); ctx.closePath(); ctx.fill();
       
-      if (this.weaponLevel < 10) {
-          // Single Engine
-          ctx.beginPath();
-          ctx.moveTo(-6, 18); ctx.lineTo(0, 32 + flicker); ctx.lineTo(6, 18); ctx.fill();
-      } else {
-          // Dual Engines
-          ctx.beginPath();
-          ctx.moveTo(-16, 15); ctx.lineTo(-12, 28 + flicker); ctx.lineTo(-8, 15); ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(16, 15); ctx.lineTo(12, 28 + flicker); ctx.lineTo(8, 15); ctx.fill();
-          
-          if (isHighLevel) {
-              // Center high-energy trail
-              ctx.globalAlpha = 0.6;
-              ctx.beginPath();
-              ctx.moveTo(-4, 18); ctx.lineTo(0, 45 + flicker * 2); ctx.lineTo(4, 18); ctx.fill();
-              ctx.globalAlpha = 1.0;
-          }
-      }
+      // Right Engine Flame
+      ctx.beginPath();
+      ctx.moveTo(12, 12); ctx.lineTo(16, 12); ctx.lineTo(14, 25 + flicker); ctx.closePath(); ctx.fill();
+      
+      ctx.shadowBlur = 0;
   }
 
   private drawShipBody(ctx: CanvasRenderingContext2D) {
       const lv = this.weaponLevel;
+      // Pixel-art inspired chunky silhouette
+      ctx.fillStyle = this.flashFrame > 0 ? 'white' : this.primaryColor;
       
-      // Main Body (Diamond/Triangle Silhouette)
+      // Main Body (Sharp Pointed Nose + Chunky Triangular Body)
       ctx.beginPath();
-      ctx.fillStyle = this.flashFrame > 0 ? '#ffffff' : '#1e40af'; // Dark Blue
-      ctx.moveTo(0, -28); // Sharp Nose
-      
-      // Side Wings based on Level
-      const wingWidth = 24 + (lv > 10 ? 8 : 0) + (lv > 18 ? 4 : 0);
-      const wingBack = 18 + (lv > 15 ? 4 : 0);
-      
-      ctx.lineTo(-wingWidth, wingBack); 
-      ctx.lineTo(-8, wingBack - 4);
-      ctx.lineTo(-6, wingBack + 4);
-      ctx.lineTo(6, wingBack + 4);
-      ctx.lineTo(8, wingBack - 4);
-      ctx.lineTo(wingWidth, wingBack);
+      ctx.moveTo(0, -38); // Tip
+      ctx.lineTo(-28, 15); // Bottom Left
+      ctx.lineTo(-10, 15); 
+      ctx.lineTo(-8, 20); 
+      ctx.lineTo(8, 20); 
+      ctx.lineTo(10, 15);
+      ctx.lineTo(28, 15); // Bottom Right
       ctx.closePath();
       ctx.fill();
-      drawOutline(ctx);
+      drawOutline(ctx, 3, '#020617');
 
-      // Nose / Cockpit Detail
+      // Cockpit / Armor Plate
+      ctx.fillStyle = '#64748b';
       ctx.beginPath();
-      ctx.fillStyle = '#94a3b8'; // Silver/Gray
-      ctx.moveTo(0, -26);
-      ctx.lineTo(-10, 4);
-      ctx.lineTo(10, 4);
+      ctx.moveTo(0, -30);
+      ctx.lineTo(-12, 5);
+      ctx.lineTo(12, 5);
       ctx.closePath();
       ctx.fill();
-      drawOutline(ctx, 1.5);
+      drawOutline(ctx, 2, '#0f172a');
 
-      // Fin Details for High Level
-      if (lv >= 11) {
-          ctx.fillStyle = '#3b82f6';
-          ctx.beginPath(); ctx.moveTo(-wingWidth, wingBack); ctx.lineTo(-wingWidth - 8, wingBack + 10); ctx.lineTo(-wingWidth + 4, wingBack + 4); ctx.fill(); drawOutline(ctx, 1);
-          ctx.beginPath(); ctx.moveTo(wingWidth, wingBack); ctx.lineTo(wingWidth + 8, wingBack + 10); ctx.lineTo(wingWidth - 4, wingBack + 4); ctx.fill(); drawOutline(ctx, 1);
-      }
+      // Decorative Tech-Lines (Silver)
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-15, 10); ctx.lineTo(-5, 10);
+      ctx.moveTo(5, 10); ctx.lineTo(15, 10);
+      ctx.stroke();
   }
 
   private drawCore(ctx: CanvasRenderingContext2D) {
-      const pulse = 1 + Math.sin(this.idleTimer * 10) * 0.15;
-      const coreSize = 7 + (this.weaponLevel / 5);
+      const pulse = 1 + Math.sin(this.idleTimer * 12) * 0.2;
+      const coreSize = 9 + (this.weaponLevel / 4);
       
       ctx.save();
-      ctx.shadowBlur = 15 * pulse;
-      ctx.shadowColor = '#22d3ee';
-      ctx.fillStyle = '#22d3ee'; // Cyan Core
+      ctx.shadowBlur = 25 * pulse;
+      ctx.shadowColor = this.glowColor;
+      ctx.fillStyle = this.glowColor;
       ctx.beginPath();
-      ctx.arc(0, 2, coreSize, 0, Math.PI * 2);
+      ctx.arc(0, 0, coreSize, 0, Math.PI * 2);
       ctx.fill();
       
-      // Inner core glow
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = 'white';
       ctx.beginPath();
-      ctx.arc(0, 2, coreSize * 0.5, 0, Math.PI * 2);
+      ctx.arc(0, 0, coreSize * 0.45, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
   }
 
   private drawWeaponBarrels(ctx: CanvasRenderingContext2D) {
-      const lv = this.weaponLevel;
-      ctx.fillStyle = '#475569'; // Gunmetal
-      
-      if (lv >= 6) {
-          // Double barrels near nose
-          ctx.fillRect(-12, -4, 4, 12); drawOutline(ctx, 1);
-          ctx.fillRect(8, -4, 4, 12); drawOutline(ctx, 1);
+      ctx.fillStyle = '#1e293b';
+      if (this.weaponLevel >= 5) {
+          ctx.fillRect(-18, -2, 5, 12); drawOutline(ctx, 1.5);
+          ctx.fillRect(13, -2, 5, 12); drawOutline(ctx, 1.5);
       }
-      
-      if (lv >= 16) {
-          // Hardpoints on wings
-          ctx.fillRect(-22, 10, 5, 8); drawOutline(ctx, 1);
-          ctx.fillRect(17, 10, 5, 8); drawOutline(ctx, 1);
+      if (this.weaponLevel >= 15) {
+          ctx.fillRect(-32, 5, 6, 10); drawOutline(ctx, 1.5);
+          ctx.fillRect(26, 5, 6, 10); drawOutline(ctx, 1.5);
       }
   }
 }
@@ -354,41 +350,6 @@ export class Bullet extends Entity {
   }
 }
 
-export class Explosion extends Entity {
-    maxRadius: number;
-    life: number = 0.3;
-    maxLife: number = 0.3;
-    damage: number;
-    damagedEnemies: Set<Enemy> = new Set();
-
-    constructor(pos: Vector2, radius: number, damage: number, color: string = '#f97316') {
-        super(pos, {x:0, y:0}, 0, color);
-        this.maxRadius = radius;
-        this.damage = damage;
-    }
-
-    update(dt: number) {
-        this.life -= dt;
-        if (this.life <= 0) this.isDead = true;
-        this.radius = (1 - (this.life / this.maxLife)) * this.maxRadius;
-    }
-
-    draw(ctx: CanvasRenderingContext2D) {
-        const alpha = this.life / this.maxLife;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
-        const grad = ctx.createRadialGradient(this.position.x, this.position.y, 0, this.position.x, this.position.y, this.radius);
-        grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
-        grad.addColorStop(0.3, `rgba(251, 191, 36, ${alpha})`);
-        grad.addColorStop(0.7, `rgba(249, 115, 22, ${alpha * 0.5})`);
-        grad.addColorStop(1, 'transparent');
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.restore();
-    }
-}
-
 export class Enemy extends Entity {
   hp: number;
   maxHp: number;
@@ -510,6 +471,41 @@ export class Boss extends Enemy {
   }
 }
 
+export class Explosion extends Entity {
+    maxRadius: number;
+    life: number = 0.3;
+    maxLife: number = 0.3;
+    damage: number;
+    damagedEnemies: Set<Enemy> = new Set();
+
+    constructor(pos: Vector2, radius: number, damage: number, color: string = '#f97316') {
+        super(pos, {x:0, y:0}, 0, color);
+        this.maxRadius = radius;
+        this.damage = damage;
+    }
+
+    update(dt: number) {
+        this.life -= dt;
+        if (this.life <= 0) this.isDead = true;
+        this.radius = (1 - (this.life / this.maxLife)) * this.maxRadius;
+    }
+
+    draw(ctx: CanvasRenderingContext2D) {
+        const alpha = this.life / this.maxLife;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(this.position.x, this.position.y, 0, this.position.x, this.position.y, this.radius);
+        grad.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+        grad.addColorStop(0.3, `rgba(251, 191, 36, ${alpha})`);
+        grad.addColorStop(0.7, `rgba(249, 115, 22, ${alpha * 0.5})`);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
 export class PowerUp extends Entity {
   rotation: number = 0;
   kind: PowerUpType;
@@ -521,7 +517,7 @@ export class PowerUp extends Entity {
     const chosenType = types[Math.floor(Math.random() * types.length)];
     const color = kind === PowerUpType.HEART ? '#ff4d4d' : WEAPON_CONFIGS[chosenType].color;
     
-    super(pos, { x: 0, y: 80 }, 26.4, color); 
+    super(pos, { x: 0, y: 80 }, 28.5, color); 
     this.kind = kind;
     this.weaponType = chosenType;
     for(let i=0; i<8; i++) this.sparkles.push({x: 0, y: 0, life: Math.random()});
@@ -534,8 +530,8 @@ export class PowerUp extends Entity {
         p.life -= dt;
         if(p.life <= 0) {
             p.life = 1;
-            p.x = (Math.random() - 0.5) * 50;
-            p.y = (Math.random() - 0.5) * 50;
+            p.x = (Math.random() - 0.5) * 55;
+            p.y = (Math.random() - 0.5) * 55;
         }
     });
   }
@@ -544,46 +540,54 @@ export class PowerUp extends Entity {
     ctx.save(); 
     ctx.translate(this.position.x, this.position.y);
     const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
-    ctx.scale(pulse * 1.1, pulse * 1.1); 
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 40);
+    ctx.scale(pulse, pulse); 
+    
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 45);
     glow.addColorStop(0, this.color + '88');
     glow.addColorStop(1, 'transparent');
     ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(0, 0, 45, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, 48, 0, Math.PI*2); ctx.fill();
+    
     this.sparkles.forEach(s => {
         ctx.fillStyle = 'white'; ctx.globalAlpha = s.life * 0.7;
-        ctx.beginPath(); ctx.arc(s.x, s.y, 2.5 * s.life, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(s.x, s.y, 3 * s.life, 0, Math.PI*2); ctx.fill();
     });
     ctx.globalAlpha = 1.0;
+
     if (this.kind === PowerUpType.HEART) {
         this.drawGlowingHeart(ctx);
     } else {
-        ctx.rotate(this.rotation * 0.1);
+        ctx.rotate(this.rotation * 0.15);
         ctx.fillStyle = this.color; 
-        ctx.fillRect(-16, -16, 32, 32);
+        ctx.fillRect(-18, -18, 36, 36);
         drawOutline(ctx, 3);
-        ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
-        ctx.strokeRect(-12, -12, 24, 24);
-        ctx.rotate(-this.rotation * 0.1);
-        ctx.fillStyle = 'black'; ctx.font = 'bold 20px sans-serif'; 
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2;
+        ctx.strokeRect(-14, -14, 28, 28);
+        
+        ctx.rotate(-this.rotation * 0.15);
+        ctx.fillStyle = 'black'; ctx.font = 'bold 22px sans-serif'; 
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(this.weaponType[0], 0, 2);
+        ctx.fillText(this.weaponType[0], 0, -2);
+        
+        // Weapon Level Up Symbol
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText("LV+", 0, 12);
     }
     ctx.restore();
   }
 
   private drawGlowingHeart(ctx: CanvasRenderingContext2D) {
-      const grad = ctx.createRadialGradient(0, -5, 2, 0, 0, 20);
-      grad.addColorStop(0, '#ff9999'); grad.addColorStop(1, '#ff3333');
+      const grad = ctx.createRadialGradient(0, -5, 2, 0, 0, 22);
+      grad.addColorStop(0, '#ffbbbb'); grad.addColorStop(1, '#ff3333');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(0, 14);
-      ctx.bezierCurveTo(-20, -2, -20, -20, 0, -20);
-      ctx.bezierCurveTo(20, -20, 20, -2, 0, 14);
+      ctx.moveTo(0, 16);
+      ctx.bezierCurveTo(-22, -2, -22, -22, 0, -22);
+      ctx.bezierCurveTo(22, -22, 22, -2, 0, 16);
       ctx.fill();
-      drawOutline(ctx, 3);
+      drawOutline(ctx, 3, '#000');
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.5;
-      ctx.beginPath(); ctx.ellipse(-6, -10, 5, 8, 0.4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(-7, -12, 6, 9, 0.4, 0, Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1.0;
   }
 }

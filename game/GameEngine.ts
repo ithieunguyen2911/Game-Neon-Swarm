@@ -32,9 +32,12 @@ export class GameEngine {
   phaseTimer: number = 0;
   screenShake: number = 0;
 
+  // Player Color Configs
+  p1Colors = { primary: COLORS.p1Primary, glow: COLORS.p1Glow };
+  p2Colors = { primary: COLORS.p2Primary, glow: COLORS.p2Glow };
+
   constructor() {
     this.localPlayerIds = ['p1'];
-    this.players.set('p1', new Player(CANVAS_WIDTH/2, CANVAS_HEIGHT - 100, 'p1', COLORS.player));
     const saved = localStorage.getItem('neon_swarm_highscore');
     if (saved) this.highScore = parseInt(saved, 10);
   }
@@ -47,7 +50,10 @@ export class GameEngine {
     }
   }
 
-  startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0) {
+  startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0, p1Config?: any, p2Config?: any) {
+    if (p1Config) this.p1Colors = p1Config;
+    if (p2Config) this.p2Colors = p2Config;
+    
     this.gameState = GameState.PLAYING;
     this.currentMapIndex = mapIndex;
     this.currentPhase = MapPhase.NORMAL;
@@ -74,7 +80,8 @@ export class GameEngine {
     this.localPlayerIds = mode === GameMode.OFFLINE_COOP ? ['p1', 'p2'] : ['p1'];
     this.localPlayerIds.forEach((id, idx) => {
       const x = mode === GameMode.OFFLINE_COOP ? (idx === 0 ? CANVAS_WIDTH/3 : 2*CANVAS_WIDTH/3) : CANVAS_WIDTH/2;
-      this.players.set(id, new Player(x, CANVAS_HEIGHT - 100, id, id === 'p2' ? COLORS.player2 : COLORS.player));
+      const config = id === 'p1' ? this.p1Colors : this.p2Colors;
+      this.players.set(id, new Player(x, CANVAS_HEIGHT - 100, id, config.primary, config.glow));
       this.fireTimer.set(id, 0);
     });
   }
@@ -191,7 +198,7 @@ export class GameEngine {
     let timer = this.fireTimer.get(p.id) || 0;
     timer -= dt;
     if (input.shooting && timer <= 0) {
-      const newBullets = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.color);
+      const newBullets = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
       
       // LASER AUTO-FOCUS INJECTION
       if (p.weaponType === WeaponType.LASER) {
@@ -239,7 +246,6 @@ export class GameEngine {
   }
 
   private checkCollisions() {
-    // 1. Bullets vs Enemies/Boss
     this.bullets.forEach(b => {
       if (!b.isEnemy) {
         this.enemies.forEach(e => {
@@ -250,7 +256,7 @@ export class GameEngine {
                this.spawnVortexParticles(b.position, b.color, 5);
             } else if (b.type === WeaponType.ROCKET) {
                b.isDead = true;
-               this.createExplosion(b.position, b.damage * 0.8, 150); // AoE sát thương 80% dam gốc
+               this.createExplosion(b.position, b.damage * 0.8, 150); 
             } else {
                b.isDead = true;
             }
@@ -289,7 +295,6 @@ export class GameEngine {
       }
     });
 
-    // 2. Explosions vs Enemies
     this.explosions.forEach(exp => {
         this.enemies.forEach(e => {
             if (!e.isDead && !exp.damagedEnemies.has(e) && this.isColliding(exp, e)) {
@@ -309,7 +314,6 @@ export class GameEngine {
         }
     });
 
-    // 3. Powerups vs Players
     this.powerups.forEach(pu => {
       this.players.forEach(p => {
         if (!p.isDead && !pu.isDead && this.isColliding(p, pu)) {
@@ -360,7 +364,7 @@ export class GameEngine {
 
   private playerHit(p: Player) {
       p.lives--; this.screenShake = 45; audio.playExplosion();
-      this.spawnParticles(p.position, p.color, 45);
+      this.spawnParticles(p.position, p.glowColor, 45);
       if (p.lives > 0) p.invulnerableTime = 3.5; else p.isDead = true;
   }
 
