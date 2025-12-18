@@ -94,7 +94,7 @@ export class RoosterRocket extends Projectile {
         ctx.translate(this.position.x, this.position.y);
         ctx.rotate(this.angle + Math.PI / 2);
 
-        const w = this.radius * 0.9;
+        const w = this.radius * 1.1;
         const h = this.radius * 2.8;
 
         // Vẽ thân tên lửa (Xám)

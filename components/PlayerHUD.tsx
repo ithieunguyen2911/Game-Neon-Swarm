@@ -54,23 +54,22 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, isLeft, label }) =>
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-2">
+                        {/* Weapon Level Bar */}
                         <div className={`flex items-center gap-3 ${!isLeft ? 'flex-row-reverse' : ''}`}>
                             <Zap className={`w-5 h-5`} style={{ color: state.glowColor }} />
-                            <span className="text-xl font-black italic mr-2" style={{ color: state.glowColor }}>LV.{state.weaponLevel}</span>
+                            <span className="text-xl font-black italic mr-2" style={{ color: state.glowColor }}>WEP LV.{state.weaponLevel}</span>
                             <div className="flex gap-0.5">
-                                {[...Array(MAX_WEAPON_LEVEL)].map((_, i) => {
-                                    const l = i + 1;
-                                    return (
-                                        <div 
-                                            key={l} 
-                                            className={`w-2.5 h-4 rounded-sm transition-all ${l <= state.weaponLevel ? 'shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-neutral-800'}`} 
-                                            style={{ backgroundColor: l <= state.weaponLevel ? state.glowColor : '' }}
-                                        />
-                                    );
-                                })}
+                                {[...Array(MAX_WEAPON_LEVEL)].map((_, i) => (
+                                    <div 
+                                        key={i} 
+                                        className={`w-2.5 h-4 rounded-sm transition-all ${i < state.weaponLevel ? 'shadow-[0_0_8px_rgba(255,255,255,0.5)]' : 'bg-neutral-800'}`} 
+                                        style={{ backgroundColor: i < state.weaponLevel ? state.glowColor : '' }}
+                                    />
+                                ))}
                             </div>
                         </div>
+
                         <div className={`${isLeft ? 'text-left' : 'text-right'} text-[11px] font-black text-neutral-500 uppercase tracking-[0.2em] italic`}>
                             {state.weaponType} SYSTEMS OVERDRIVE
                         </div>

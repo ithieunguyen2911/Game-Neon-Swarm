@@ -141,7 +141,6 @@ export class PixiRenderer {
                 const isFlashing = e.flashFrame > 0;
                 const isHint = e.state === EnemyState.ENTRY;
                 
-                // Animation sinh học: Bobbing & Squash/Stretch
                 const bobY = Math.sin(e.stateTimer * 4) * 3;
                 const squash = 1 + Math.sin(e.stateTimer * 8) * 0.02;
                 const stretch = 1 - Math.sin(e.stateTimer * 8) * 0.01;
@@ -152,7 +151,6 @@ export class PixiRenderer {
                 container.scale.set(stretch * baseScale, squash * baseScale);
                 container.alpha = e.opacity;
 
-                // Cánh đập lệch pha
                 const flap = Math.sin(e.wingFlap);
                 const combWobble = Math.sin(e.stateTimer * 6) * 0.15;
 
@@ -190,6 +188,12 @@ export class PixiRenderer {
                         fill.tint = ratio < 0.3 ? 0xef4444 : (ratio < 0.6 ? 0xf59e0b : 0x22c55e);
                     }
                 }
+            } else if (entity instanceof PowerUp) {
+                const pu = entity as PowerUp;
+                container.x = pu.position.x;
+                container.y = pu.position.y;
+                const pulse = 1 + Math.sin(Date.now() / 150) * 0.15;
+                container.scale.set(pulse, pulse);
             } else {
                 container.x = entity.position.x;
                 container.y = entity.position.y;
@@ -219,22 +223,17 @@ export class PixiRenderer {
     private createView(entity: Entity, type: string): PIXI.Container {
         const container = new PIXI.Container();
         if (type === 'player') {
-            const upgrade = new PIXI.Graphics(); upgrade.name = 'upgradeFx'; upgrade.alpha = 0; container.addChild(upgrade);
             const g = new PIXI.Graphics(); g.name = 'ship'; container.addChild(g);
         } 
         else if (type === 'enemy' || type === 'boss') {
-            // Wings
             const leftWing = this.createThreeLayerPixiWing('left');
             const rightWing = this.createThreeLayerPixiWing('right');
             leftWing.name = 'leftWing'; rightWing.name = 'rightWing';
             leftWing.position.set(-10, 0); rightWing.position.set(10, 0);
             container.addChild(leftWing, rightWing);
 
-            // Teardrop Body (Non-circle)
             const body = new PIXI.Graphics(); body.name = 'body'; 
-            // Head
             body.ellipse(0, -28, 15, 13).fill(0xffffff); 
-            // Neck to Belly Path
             body.moveTo(-13, -18)
                 .quadraticCurveTo(-28, -2, -26, 18)
                 .quadraticCurveTo(-22, 38, 0, 40)
@@ -245,7 +244,6 @@ export class PixiRenderer {
                 .stroke({ width: 4, color: 0x020617 });
             container.addChild(body);
 
-            // Advanced Comb (Mào gà)
             const comb = new PIXI.Graphics(); comb.name = 'comb';
             comb.y = -32;
             comb.moveTo(-12, 0)
@@ -257,19 +255,33 @@ export class PixiRenderer {
                 .fill(0xef4444).stroke({ width: 3, color: 0x020617 });
             container.addChild(comb);
 
-            // Face (Eyes, Beak)
             const face = new PIXI.Graphics();
             face.circle(-14, -6, 12).circle(14, -6, 12).fill(0xffffff).stroke({ width: 3, color: 0x020617 });
             face.circle(-12, -4, 5).circle(12, -4, 5).fill(0x020617);
             face.moveTo(-10, 8).quadraticCurveTo(0, 22, 10, 8).quadraticCurveTo(0, 4, -10, 8).fill(0xfacc15).stroke({ width: 2, color: 0x020617 });
             container.addChild(face);
 
-            // HP Bar
             const hpBar = new PIXI.Container(); hpBar.name = 'hpBar'; hpBar.y = -65;
             const bg = new PIXI.Graphics(); bg.roundRect(-35, 0, 70, 8, 4).fill(0x020617);
             const fill = new PIXI.Graphics(); fill.name = 'fill'; fill.roundRect(-35, 0, 70, 8, 4).fill(0x22c55e);
             hpBar.addChild(bg, fill); hpBar.visible = false;
             container.addChild(hpBar);
+        }
+        else if (type === 'powerup') {
+            const pu = entity as PowerUp;
+            const g = new PIXI.Graphics();
+            if (pu.kind === PowerUpType.HEART) {
+                g.moveTo(0, 16).bezierCurveTo(-22, -2, -22, -22, 0, -22).bezierCurveTo(22, -22, 22, -2, 0, 16).fill(0xff4d4d).stroke({width: 3, color: 0x000});
+            } else if (pu.kind === PowerUpType.POWER_BOOST) {
+                g.circle(0, 0, 24).fill(0xa855f7).stroke({width: 3, color: 0x000});
+                const bolt = new PIXI.Graphics().moveTo(0, -15).lineTo(-10, 2).lineTo(-2, 2).lineTo(-6, 15).lineTo(10, -2).lineTo(2, -2).closePath().fill(0xfacc15).stroke({width: 1.5, color: 0x000});
+                g.addChild(bolt);
+            } else {
+                g.roundRect(-18, -18, 36, 36, 4).fill(PIXI.Color.shared.setValue(pu.color).toNumber()).stroke({width: 3, color: 0x000});
+                const txt = new PIXI.Text({ text: pu.weaponType[0], style: { fontSize: 20, fontWeight: 'bold' }});
+                txt.anchor.set(0.5); txt.y = -2; g.addChild(txt);
+            }
+            container.addChild(g);
         }
         else if (type === 'bullet') {
             const g = new PIXI.Graphics();
@@ -278,10 +290,6 @@ export class PixiRenderer {
                 g.ellipse(0, 0, b.radius, b.radius * 1.4).fill(0xfefce8).stroke({width: 2.5, color: 0x020617});
                 const core = new PIXI.Graphics(); core.name = 'core'; core.ellipse(0, 0, b.radius * 0.45, b.radius * 0.7).fill(0x22d3ee);
                 container.addChild(g, core);
-            } else if (b.type === WeaponType.LASER) {
-                const w = (b as PhotonLaser).currentBeamWidth;
-                g.roundRect(-w/2, 0, w, 180, 6).fill(0xffffff).stroke({ width: 1, color: 0x22c55e });
-                container.addChild(g);
             } else {
                 g.circle(0, 0, b.radius).fill(b.color); container.addChild(g);
             }
@@ -295,27 +303,12 @@ export class PixiRenderer {
     private createThreeLayerPixiWing(side: 'left' | 'right'): PIXI.Container {
         const dir = side === 'left' ? -1 : 1;
         const wing = new PIXI.Container();
-        
-        // Layer 1: Primary feathers (Tầng dài nhất)
         const primary = new PIXI.Graphics(); primary.name = 'primary';
-        primary.moveTo(dir * 4, 0)
-            .quadraticCurveTo(dir * 40, 10, dir * 55, 26)
-            .quadraticCurveTo(dir * 35, 30, dir * 14, 20)
-            .closePath()
-            .fill(0xffffff).stroke({ width: 3, color: 0x020617 });
-            
-        // Layer 2: Secondary feathers (Tầng giữa)
+        primary.moveTo(dir * 4, 0).quadraticCurveTo(dir * 40, 10, dir * 55, 26).quadraticCurveTo(dir * 35, 30, dir * 14, 20).closePath().fill(0xffffff).stroke({ width: 3, color: 0x020617 });
         const secondary = new PIXI.Graphics(); secondary.name = 'secondary';
-        secondary.moveTo(dir * 6, 4)
-            .quadraticCurveTo(dir * 30, 16, dir * 38, 30)
-            .quadraticCurveTo(dir * 24, 26, dir * 12, 18)
-            .closePath()
-            .fill(0xf1f5f9).stroke({ width: 2.5, color: 0x020617 });
-            
-        // Layer 3: Coverts (Gốc cánh)
+        secondary.moveTo(dir * 6, 4).quadraticCurveTo(dir * 30, 16, dir * 38, 30).quadraticCurveTo(dir * 24, 26, dir * 12, 18).closePath().fill(0xf1f5f9).stroke({ width: 2.5, color: 0x020617 });
         const coverts = new PIXI.Graphics(); coverts.name = 'coverts';
         coverts.ellipse(dir * 8, 6, 14, 10).fill(0xf8fafc).stroke({ width: 2, color: 0x020617 });
-
         wing.addChild(primary, secondary, coverts);
         return wing;
     }

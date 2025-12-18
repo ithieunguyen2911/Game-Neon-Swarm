@@ -47,6 +47,15 @@ export class Player extends Entity {
     return 1;
   }
 
+  // Logic penalty khi chết: giảm 2 cấp, nếu là 1 hoặc 2 thì về 1
+  applyDeathPenalty() {
+    if (this.weaponLevel <= 2) {
+      this.weaponLevel = 1;
+    } else {
+      this.weaponLevel -= 2;
+    }
+  }
+
   handleInput(dt: number, input: PlayerInput, zone: ZoneType) {
     if (this.state === PlayerState.RESPAWNING) return;
 
@@ -76,16 +85,15 @@ export class Player extends Entity {
   update(dt: number) {
     if (this.state === PlayerState.RESPAWNING) {
       this.respawnTimer -= dt;
-      this.invulnerableTime = 0.5; // Giữ trạng thái bất tử ngắn hạn liên tục khi đang bay lên
+      this.invulnerableTime = 0.5;
 
-      // Easing bay lên mượt mà từ dưới đáy
       const targetY = CANVAS_HEIGHT * 0.82;
       this.position.y += (targetY - this.position.y) * dt * 3.5;
       this.tilt = Math.sin(this.respawnTimer * 10) * 0.05;
 
       if (this.respawnTimer <= 0) {
         this.state = PlayerState.ALIVE;
-        this.invulnerableTime = 2.5; // 2.5s bất tử sau khi hồi sinh xong
+        this.invulnerableTime = 2.5;
       }
       return;
     }
@@ -106,7 +114,6 @@ export class Player extends Entity {
     
     ctx.save();
     
-    // Ghost effect khi respawning hoặc invulnerable
     if (this.state === PlayerState.RESPAWNING) {
       ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 50) * 0.3;
     } else if (this.invulnerableTime > 0) {
@@ -181,7 +188,8 @@ export class Player extends Entity {
   private drawCore(ctx: CanvasRenderingContext2D) {
     const tier = this.tier;
     const pulse = 1 + Math.sin(this.idleTimer * 10) * 0.15;
-    const size = 6 + this.weaponLevel * 0.5;
+    const combinedLvl = this.weaponLevel;
+    const size = 6 + combinedLvl * 0.5;
     ctx.save();
     ctx.shadowBlur = 15 + tier * 10;
     ctx.shadowColor = this.glowColor;

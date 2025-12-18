@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { PixiRenderer } from '../game/PixiRenderer';
@@ -19,7 +20,6 @@ export const GameCanvas: React.FC = () => {
   const pixiContainerRef = useRef<HTMLDivElement>(null);
   const inputHandlerRef = useRef<InputHandler | null>(null);
   const loopRef = useRef<number | null>(null);
-  const isMounting = useRef(false);
   const isPlaying = useRef(false);
   
   const [usePixi, setUsePixi] = useState(false);

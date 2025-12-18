@@ -1,3 +1,4 @@
+
 import { Entity, drawOutline } from './BaseEntity';
 import { Vector2, PowerUpType, WeaponType } from '../../types';
 import { WEAPON_CONFIGS, CANVAS_WIDTH, CANVAS_HEIGHT } from '../../constants';
@@ -11,7 +12,11 @@ export class PowerUp extends Entity {
   constructor(pos: Vector2, kind: PowerUpType = PowerUpType.WEAPON) {
     const types = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER];
     const chosenType = types[Math.floor(Math.random() * types.length)];
-    const color = kind === PowerUpType.HEART ? '#ff4d4d' : WEAPON_CONFIGS[chosenType].color;
+    
+    let color = '#ffffff';
+    if (kind === PowerUpType.HEART) color = '#ff4d4d';
+    else if (kind === PowerUpType.POWER_BOOST) color = '#a855f7'; // Purple for booster
+    else color = WEAPON_CONFIGS[chosenType].color;
     
     super(pos, { x: 0, y: 80 }, 28.5, color); 
     this.kind = kind;
@@ -52,6 +57,8 @@ export class PowerUp extends Entity {
 
     if (this.kind === PowerUpType.HEART) {
         this.drawGlowingHeart(ctx);
+    } else if (this.kind === PowerUpType.POWER_BOOST) {
+        this.drawPowerBoost(ctx);
     } else {
         ctx.rotate(this.rotation * 0.15);
         ctx.fillStyle = this.color; 
@@ -84,6 +91,20 @@ export class PowerUp extends Entity {
       ctx.fillStyle = 'white'; ctx.globalAlpha = 0.5;
       ctx.beginPath(); ctx.ellipse(-7, -12, 6, 9, 0.4, 0, Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1.0;
+  }
+
+  private drawPowerBoost(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = '#a855f7';
+    ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI * 2); ctx.fill();
+    drawOutline(ctx, 3, '#000');
+    // Lightning bolt
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.moveTo(0, -15); ctx.lineTo(-10, 2); ctx.lineTo(-2, 2);
+    ctx.lineTo(-6, 15); ctx.lineTo(10, -2); ctx.lineTo(2, -2);
+    ctx.closePath();
+    ctx.fill();
+    drawOutline(ctx, 1.5, '#000');
   }
 }
 

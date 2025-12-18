@@ -69,7 +69,8 @@ export enum WeaponType {
 
 export enum PowerUpType {
   WEAPON = 'WEAPON',
-  HEART = 'HEART'
+  HEART = 'HEART',
+  POWER_BOOST = 'POWER_BOOST'
 }
 
 export interface PlayerInput {

@@ -2,8 +2,7 @@
 import { Player, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion, Projectile, EggBlasterBullet, PhotonLaser, FeatherShotgunBullet, HelixDNAProjectile, RoosterRocket } from './Entities';
 import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType, EnemyState, PlayerState } from '../types';
 import { 
-  CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, ENEMY_SPAWN_RATE_INITIAL,
-  ENEMY_BASE_SPEED, ENEMY_SIZE, MAP_PROGRESSION, WEAPON_CONFIGS, PLAYER_SIZE
+  CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, MAP_PROGRESSION, PLAYER_SIZE
 } from '../constants';
 import { audio } from '../services/AudioSynthesizer';
 import { WeaponSystem } from './WeaponSystem';
@@ -95,7 +94,7 @@ export class GameEngine {
     this.isHinting = false;
     this.players.forEach(p => {
         p.radius = PLAYER_SIZE * this.targetScale;
-        p.invulnerableTime = 2.0; // Bất tử khi bắt đầu map mới
+        p.invulnerableTime = 2.0; 
     });
   }
 
@@ -392,9 +391,16 @@ export class GameEngine {
     this.screenShake = Math.max(this.screenShake, 15); 
     audio.playExplosion();
     this.spawnParticles(e.position, e.color, 25, 2.5);
-    if (Math.random() < 0.22) {
-        const isHeart = Math.random() < 0.35;
-        const pu = new PowerUp({...e.position}, isHeart ? PowerUpType.HEART : PowerUpType.WEAPON);
+    
+    // Tỉ lệ rơi vật phẩm (25%)
+    if (Math.random() < 0.25) {
+        const r = Math.random();
+        let kind = PowerUpType.WEAPON;
+        
+        if (r < 0.25) kind = PowerUpType.HEART; // 25% trong số rơi đồ là Heart
+        else if (r < 0.5) kind = PowerUpType.POWER_BOOST; // 25% trong số rơi đồ là Power Booster
+        
+        const pu = new PowerUp({...e.position}, kind);
         pu.radius *= this.worldScale;
         this.powerups.push(pu);
     }
@@ -405,6 +411,9 @@ export class GameEngine {
       this.spawnParticles(p.position, p.glowColor, 60, 2.0);
       this.spawnParticles(p.position, '#ffffff', 20, 3.0);
       
+      // Thực thi luật Death Penalty
+      p.applyDeathPenalty();
+
       if (p.lives > 0) {
           this.respawnPlayer(p);
       } else {
@@ -414,20 +423,31 @@ export class GameEngine {
 
   private respawnPlayer(p: Player) {
       p.state = PlayerState.RESPAWNING;
-      p.respawnTimer = 1.5; // 1.5s để bay lên
+      p.respawnTimer = 1.5; 
       p.position.x = CANVAS_WIDTH / 2;
       p.position.y = CANVAS_HEIGHT + 150;
       p.velocity.x = 0;
       p.velocity.y = 0;
-      p.invulnerableTime = 3.0; // Bất tử tổng cộng 3s
+      p.invulnerableTime = 3.0; 
   }
 
   private collectPowerup(p: Player, pu: PowerUp) {
     audio.playPowerup();
-    if (pu.kind === PowerUpType.HEART) { p.lives++; } 
+    if (pu.kind === PowerUpType.HEART) { 
+        p.lives++; 
+    } 
+    else if (pu.kind === PowerUpType.POWER_BOOST) {
+        // Tăng level đạn hiện tại, không đổi vũ khí
+        p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
+    }
     else {
-        if (p.weaponType === pu.weaponType) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
-        else p.weaponType = pu.weaponType;
+        if (p.weaponType === pu.weaponType) {
+          p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
+        } else {
+          p.weaponType = pu.weaponType;
+          // Note: Giữ nguyên weaponLevel khi đổi loại vũ khí từ PowerUp màu (nếu đó là ý đồ của người dùng)
+          // Thường thì nhặt súng mới sẻ reset level hoặc giữ nguyên tùy game feel.
+        }
     }
   }
 
