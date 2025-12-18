@@ -3,22 +3,25 @@ import { Projectile } from './Projectile';
 import { Vector2, WeaponType } from '../../../types';
 import { GameEngine } from '../../GameEngine';
 import { Enemy } from '../Chicken';
+import { CANVAS_HEIGHT } from '../../../constants';
 
 export class RoosterRocket extends Projectile {
     private target: Enemy | null = null;
     private angle: number;
     private speed: number;
-    private turnSpeed: number = 2.8; // Tăng nhẹ tốc độ lượn để mượt hơn
+    private turnSpeed: number = 2.8;
     private phase: 'SWERVE' | 'HOMING' | 'BOOST' = 'SWERVE';
+    private targetScanTimer: number = 0;
+    private maxLife: number = 2.0; 
     
-    // Hệ thống đuôi (Trail)
     private trail: Vector2[] = [];
-    private maxTrailLength: number = 15; // Độ dài dải đuôi
+    private maxTrailLength: number = 30; 
 
     constructor(pos: Vector2, vel: Vector2, damage: number, color: string, ownerId: string) {
         super(pos, vel, 16, color, damage, ownerId, WeaponType.ROCKET);
         this.angle = Math.atan2(vel.y, vel.x);
         this.speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+        this.targetScanTimer = Math.random() * 0.1;
     }
 
     private findTarget(engine: GameEngine) {
@@ -27,14 +30,14 @@ export class RoosterRocket extends Projectile {
         let nearest: Enemy | null = null;
         let minDist = 1200;
         
-        engine.enemies.forEach(e => {
-            if (e.isDead || e.position.y < -100) return;
+        for (const e of engine.enemies) {
+            if (e.isDead || e.position.y < -50 || e.position.y > CANVAS_HEIGHT) continue;
             const d = Math.hypot(e.position.x - this.position.x, e.position.y - this.position.y);
             if (d < minDist) {
                 minDist = d;
                 nearest = e;
             }
-        });
+        }
         return nearest;
     }
 
@@ -45,32 +48,34 @@ export class RoosterRocket extends Projectile {
 
     updateWithEngine(dt: number, engine: GameEngine) {
         this.age += dt;
+        this.targetScanTimer -= dt;
 
-        // Lưu vị trí vào đuôi
-        this.trail.unshift({ ...this.position });
-        if (this.trail.length > this.maxTrailLength) {
-            this.trail.pop();
+        if (this.age > this.maxLife) {
+            this.onImpact(engine, this.position);
+            return;
         }
 
-        // Phase transitions
-        if (this.age < 0.4) {
+        this.trail.unshift({ ...this.position });
+        if (this.trail.length > this.maxTrailLength) this.trail.pop();
+
+        if (this.age < 0.25) { 
             this.phase = 'SWERVE';
         } else {
-            if (!this.target || this.target.isDead) {
+            if (this.targetScanTimer <= 0 || !this.target || this.target.isDead) {
                 this.target = this.findTarget(engine);
+                this.targetScanTimer = 0.15;
             }
             
             if (this.target) {
                 const dist = Math.hypot(this.target.position.x - this.position.x, this.target.position.y - this.position.y);
-                this.phase = dist < 200 ? 'BOOST' : 'HOMING';
+                this.phase = dist < 250 ? 'BOOST' : 'HOMING';
             } else {
                 this.phase = 'HOMING';
             }
         }
 
-        // Movement Logic
         if (this.phase === 'SWERVE') {
-            this.angle += Math.sin(this.age * 20) * 0.08;
+            this.angle += Math.sin(this.age * 20) * 0.1;
         } 
         else if (this.phase === 'HOMING' && this.target) {
             const targetAngle = Math.atan2(this.target.position.y - this.position.y, this.target.position.x - this.position.x);
@@ -78,8 +83,8 @@ export class RoosterRocket extends Projectile {
         }
         else if (this.phase === 'BOOST' && this.target) {
             const targetAngle = Math.atan2(this.target.position.y - this.position.y, this.target.position.x - this.position.x);
-            this.angle = this.lerpAngle(this.angle, targetAngle, 10 * dt);
-            this.speed = Math.min(this.speed * (1 + dt * 2.5), 1800);
+            this.angle = this.lerpAngle(this.angle, targetAngle, 12 * dt);
+            this.speed = Math.min(this.speed * (1 + dt * 3.0), 1900);
         }
 
         this.velocity.x = Math.cos(this.angle) * this.speed;
@@ -88,23 +93,15 @@ export class RoosterRocket extends Projectile {
         this.position.x += this.velocity.x * dt;
         this.position.y += this.velocity.y * dt;
 
-        // Sinh hạt từ đuôi
-        if (Math.random() < 0.8) {
+        if (Math.random() < 0.3) {
             const spawnColor = this.phase === 'BOOST' ? '#fde047' : '#f97316';
-            engine.spawnParticles(this.position, spawnColor, 1, 1.5);
-            if (this.phase === 'BOOST') {
-                engine.spawnParticles(this.position, '#ffffff', 1, 2.0);
-            }
-            if (Math.random() < 0.3) {
-                engine.spawnParticles(this.position, '#475569', 1, 0.4); // Khói xám
-            }
+            engine.spawnParticles(this.position, spawnColor, 1, 1.2);
         }
     }
 
     update(dt: number) {}
 
     draw(ctx: CanvasRenderingContext2D) {
-        // 1. Vẽ đuôi Ribbon Trail (Dải lụa mượt mà bám theo quỹ đạo)
         this.drawRibbonTrail(ctx);
 
         ctx.save();
@@ -114,72 +111,126 @@ export class RoosterRocket extends Projectile {
         const w = this.radius * 1.15;
         const h = this.radius * 2.8;
 
-        // 2. Hiệu ứng lửa phản lực đa tầng (Phun ra từ đít tên lửa)
         this.drawJetFire(ctx, w, h);
+        
+        // --- VẼ CÁNH DƯỚI (Nằm dưới thân) ---
+        this.drawSingleFin(ctx, 0, h/2 - 4, 12, 18, 'bottom');
 
-        // 3. Vẽ thân tên lửa
+        // --- VẼ CÁNH TRÁI & PHẢI ---
+        this.drawSingleFin(ctx, -w/2, h/2 - 8, 22, 20, 'left');
+        this.drawSingleFin(ctx, w/2, h/2 - 8, 22, 20, 'right');
+
+        // --- THÂN TÊN LỬA ---
         ctx.fillStyle = '#94a3b8';
         ctx.beginPath();
         ctx.roundRect(-w / 2, -h / 2, w, h, 6);
         ctx.fill();
-        
         ctx.strokeStyle = '#0f172a';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 3.5;
         ctx.stroke();
 
-        // 4. Vẽ đầu tên lửa
+        // Mũi tên lửa
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
         ctx.moveTo(-w / 2, -h / 2 + 5);
-        ctx.lineTo(0, -h / 2 - 18);
+        ctx.lineTo(0, -h / 2 - 22);
         ctx.lineTo(w / 2, -h / 2 + 5);
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        // 5. Cánh tên lửa nhỏ bên hông
-        ctx.fillStyle = '#64748b';
-        ctx.beginPath();
-        ctx.moveTo(-w/2, 0); ctx.lineTo(-w/2 - 8, 12); ctx.lineTo(-w/2, 18); ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(w/2, 0); ctx.lineTo(w/2 + 8, 12); ctx.lineTo(w/2, 18); ctx.fill();
+        // --- VẼ CÁNH TRÊN (Nằm trên thân) ---
+        this.drawSingleFin(ctx, 0, h/2 - 12, 10, 24, 'top');
 
-        // 6. Điểm sáng trên kính tên lửa
-        ctx.fillStyle = 'white';
-        ctx.beginPath(); ctx.arc(0, -5, 4, 0, Math.PI * 2); ctx.fill();
+        // Chi tiết cơ khí trên thân
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-w/2, 0); ctx.lineTo(w/2, 0); ctx.stroke();
+        
+        ctx.restore();
+    }
+
+    /**
+     * Vẽ một cánh đơn (Fin) hình tam giác cụt
+     * @param ctx Context
+     * @param x Gốc tọa độ X
+     * @param y Gốc tọa độ Y
+     * @param width Chiều rộng cánh
+     * @param height Chiều dài cánh (vươn ra ngoài)
+     * @param pos Vị trí: 'left', 'right', 'top', 'bottom'
+     */
+    private drawSingleFin(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, pos: string) {
+        ctx.save();
+        ctx.translate(x, y);
+        
+        const slant = 12; // Độ nghiêng ra sau
+        ctx.fillStyle = (pos === 'top' || pos === 'bottom') ? '#64748b' : '#475569';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 2.5;
+
+        ctx.beginPath();
+        if (pos === 'left') {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-height, slant);     // Cạnh trên nghiêng
+            ctx.lineTo(-height, slant + 10); // Cạnh cụt
+            ctx.lineTo(0, 8);               // Gốc dưới
+        } else if (pos === 'right') {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(height, slant);
+            ctx.lineTo(height, slant + 10);
+            ctx.lineTo(0, 8);
+        } else if (pos === 'top') {
+            // Cánh dọc (vây lưng) - vẽ như một hình chữ nhật hẹp nghiêng perspective
+            ctx.fillStyle = '#94a3b8';
+            ctx.moveTo(-2, 0);
+            ctx.lineTo(-1, -height);
+            ctx.lineTo(1, -height);
+            ctx.lineTo(2, 0);
+        } else if (pos === 'bottom') {
+            // Cánh bụng - khuất một phần
+            ctx.fillStyle = '#334155';
+            ctx.moveTo(-2, 0);
+            ctx.lineTo(-3, height);
+            ctx.lineTo(3, height);
+            ctx.lineTo(2, 0);
+        }
+        
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Thêm một chút highlight cho cánh trên
+        if (pos === 'top') {
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -height + 2); ctx.stroke();
+        }
 
         ctx.restore();
     }
 
     private drawRibbonTrail(ctx: CanvasRenderingContext2D) {
         if (this.trail.length < 2) return;
-
         ctx.save();
         const baseColor = this.phase === 'BOOST' ? '#fde047' : '#f97316';
         
-        // Vẽ dải đuôi mờ dần
         for (let i = 0; i < this.trail.length - 1; i++) {
-            const p1 = this.trail[i];
-            const p2 = this.trail[i + 1];
-            const alpha = (1 - i / this.trail.length) * 0.6;
-            const width = this.radius * (1 - i / this.trail.length) * 1.2;
-
+            const ratio = 1 - (i / this.trail.length);
             ctx.beginPath();
             ctx.strokeStyle = baseColor;
-            ctx.globalAlpha = alpha;
-            ctx.lineWidth = width;
+            ctx.globalAlpha = ratio * 0.5;
+            ctx.lineWidth = this.radius * 0.9 * ratio;
             ctx.lineCap = 'round';
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
+            ctx.moveTo(this.trail[i].x, this.trail[i].y);
+            ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
             ctx.stroke();
-
-            // Lõi trắng ở giữa dải đuôi
+            
             ctx.beginPath();
             ctx.strokeStyle = '#ffffff';
-            ctx.globalAlpha = alpha * 0.5;
-            ctx.lineWidth = width * 0.3;
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
+            ctx.globalAlpha = ratio * 0.3;
+            ctx.lineWidth = ctx.lineWidth * 0.3;
+            ctx.moveTo(this.trail[i].x, this.trail[i].y);
+            ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
             ctx.stroke();
         }
         ctx.restore();
@@ -187,41 +238,14 @@ export class RoosterRocket extends Projectile {
 
     private drawJetFire(ctx: CanvasRenderingContext2D, w: number, h: number) {
         const isBoost = this.phase === 'BOOST';
-        const fireLen = (isBoost ? 45 : 25) + Math.random() * 20;
-        const fireWidth = w * (isBoost ? 1.2 : 0.8);
-
-        // Lớp lửa ngoài (Cam)
-        const gradOuter = ctx.createLinearGradient(0, h/2, 0, h/2 + fireLen);
-        gradOuter.addColorStop(0, '#f97316');
-        gradOuter.addColorStop(1, 'transparent');
-        
-        ctx.fillStyle = gradOuter;
+        const fireLen = (isBoost ? 45 : 22) + Math.random() * 18;
+        const fireWidth = w * (isBoost ? 1.1 : 0.75);
+        ctx.fillStyle = isBoost ? '#fde047' : '#f97316';
         ctx.beginPath();
         ctx.moveTo(-fireWidth/2, h/2);
-        ctx.quadraticCurveTo(0, h/2 + fireLen * 1.2, fireWidth/2, h/2);
+        ctx.lineTo(0, h/2 + fireLen);
+        ctx.lineTo(fireWidth/2, h/2);
         ctx.fill();
-
-        // Lớp lửa lõi (Vàng/Trắng)
-        const gradInner = ctx.createLinearGradient(0, h/2, 0, h/2 + fireLen * 0.6);
-        gradInner.addColorStop(0, '#ffffff');
-        gradInner.addColorStop(1, 'transparent');
-        
-        ctx.fillStyle = gradInner;
-        ctx.beginPath();
-        ctx.moveTo(-fireWidth/4, h/2);
-        ctx.quadraticCurveTo(0, h/2 + fireLen * 0.7, fireWidth/4, h/2);
-        ctx.fill();
-        
-        // Hiệu ứng "Shock Diamonds" (Các vòng tròn nhiệt nhỏ nếu đang boost)
-        if (isBoost) {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.lineWidth = 1;
-            for (let i = 1; i <= 3; i++) {
-                ctx.beginPath();
-                ctx.arc(0, h/2 + i * 10, fireWidth/(2*i), 0, Math.PI * 2);
-                ctx.stroke();
-            }
-        }
     }
 
     onImpact(engine: GameEngine, impactPos: Vector2) {

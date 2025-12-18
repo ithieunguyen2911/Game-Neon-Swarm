@@ -4,8 +4,9 @@ import { GameEngine } from '../game/GameEngine';
 import { PixiRenderer } from '../game/PixiRenderer';
 import { MAP_PROGRESSION, DEFAULT_CONTROLS, COLOR_PALETTE } from '../constants';
 import { GameState, GameMode, WeaponType } from '../types';
-import { Target, Settings2, Sparkles } from 'lucide-react';
+import { Target, Settings2, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import { InputHandler } from '../game/InputHandler';
+import { audio } from '../services/AudioSynthesizer';
 
 // Import sub-components
 import { PlayerHUD, PlayerHUDState } from './PlayerHUD';
@@ -24,6 +25,7 @@ export const GameCanvas: React.FC = () => {
   const isPlaying = useRef(false);
   
   const [usePixi, setUsePixi] = useState(false);
+  const [isMuted, setIsMuted] = useState(audio.isMuted);
   const [gameState, setGameState] = useState<GameState>(engine.gameState);
   const [score, setScore] = useState(0);
   const [mapIdx, setMapIdx] = useState(0);
@@ -154,6 +156,11 @@ export const GameCanvas: React.FC = () => {
     setGameState(GameState.MENU);
   };
 
+  const handleToggleMute = () => {
+    const muted = audio.toggleMute();
+    setIsMuted(muted);
+  };
+
   const currentMap = MAP_PROGRESSION[mapIdx] || MAP_PROGRESSION[0];
 
   return (
@@ -165,6 +172,13 @@ export const GameCanvas: React.FC = () => {
           >
             {usePixi ? <Sparkles className="w-4 h-4" /> : <Settings2 className="w-4 h-4" />}
             {usePixi ? 'PIXIJS (EXPERIMENTAL)' : 'CANVAS 2D (STABLE)'}
+          </button>
+          
+          <button 
+            onClick={handleToggleMute}
+            className={`flex items-center justify-center p-2 rounded-full transition-all ${isMuted ? 'bg-red-900/40 text-red-400' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}
+          >
+            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
       </div>
 

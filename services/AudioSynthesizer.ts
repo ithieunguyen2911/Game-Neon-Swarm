@@ -1,19 +1,21 @@
+
 // A simple synthesizer to generate retro game sounds using Web Audio API
 // This avoids the need for external MP3/WAV files and ensures immediate feedback.
 
 class AudioSynthesizer {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  public isMuted: boolean = false;
 
   constructor() {
-    // Lazy initialization on first user interaction
+    this.isMuted = localStorage.getItem('neon_swarm_muted') === 'true';
   }
 
   init() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.3; // Keep it reasonable
+      this.updateGain();
       this.masterGain.connect(this.ctx.destination);
     }
     if (this.ctx.state === 'suspended') {
@@ -21,8 +23,21 @@ class AudioSynthesizer {
     }
   }
 
+  toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    localStorage.setItem('neon_swarm_muted', this.isMuted.toString());
+    this.updateGain();
+    return this.isMuted;
+  }
+
+  private updateGain() {
+    if (this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.isMuted ? 0 : 0.3, this.ctx?.currentTime || 0, 0.05);
+    }
+  }
+
   playShoot() {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
     
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -42,7 +57,7 @@ class AudioSynthesizer {
   }
 
   playExplosion() {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -62,7 +77,7 @@ class AudioSynthesizer {
   }
 
   playPowerup() {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -83,7 +98,7 @@ class AudioSynthesizer {
   }
 
   playHit() {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     

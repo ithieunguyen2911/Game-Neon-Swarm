@@ -416,7 +416,7 @@ export class GameEngine {
 
   private killEnemy(e: Enemy) {
     this.score += e.scoreValue; this.comboCount++; this.comboTimer = 1.2;
-    this.screenShake = Math.max(this.screenShake, 15); 
+    // Đã xóa hiệu ứng screenShake ở đây để giữ màn hình ổn định khi tiêu diệt quái thường
     audio.playExplosion();
     this.spawnParticles(e.position, e.color, 25, 2.5);
     
