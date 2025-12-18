@@ -222,33 +222,61 @@ export class GameEngine {
 
   private spawnBoss() {
       const map = MAP_PROGRESSION[this.currentMapIndex];
-      this.boss = new Boss({ x: CANVAS_WIDTH / 2, y: -400 }, 800 * Math.pow(1.6, this.currentMapIndex), map.bossName, map.zone);
-      this.boss.radius *= this.worldScale * 1.5; 
+      
+      // Xác định màu sắc và vũ khí dựa trên theme của Map
+      const themeColors = ['#22d3ee', '#f97316', '#22c55e', '#ffffff', '#a855f7', '#10b981', '#fb7185', '#fbbf24', '#f87171', '#ffffff'];
+      const bossWeapons = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER, WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER];
+      
+      const themeColor = themeColors[this.currentMapIndex % themeColors.length];
+      const weapon = bossWeapons[this.currentMapIndex % bossWeapons.length];
+
+      this.boss = new Boss(
+        { x: CANVAS_WIDTH / 2, y: -400 }, 
+        1000 * Math.pow(1.7, this.currentMapIndex), 
+        map.bossName, 
+        map.zone,
+        themeColor
+      );
+      
+      this.boss.bossWeapon = weapon;
+      this.boss.radius *= this.worldScale * 1.6; 
       audio.playPowerup();
   }
 
   private updateBossLogic(dt: number) {
       if (!this.boss) return;
+      
+      // Logic Vulnerability tùy Map để tạo độ khó khác nhau
       switch(this.currentMapIndex) {
-          case 0: this.boss.isVulnerable = this.boss.shootTimer > 3.2; break;
-          case 1: this.boss.isVulnerable = Math.abs(this.boss.position.x - CANVAS_WIDTH/2) > (CANVAS_WIDTH * 0.32); break;
-          default: this.boss.isVulnerable = Math.floor(this.phaseTimer) % 5 === 0; break;
+          case 0: this.boss.isVulnerable = this.boss.shootTimer > 3.0; break;
+          case 1: this.boss.isVulnerable = Math.abs(this.boss.position.x - CANVAS_WIDTH/2) > (CANVAS_WIDTH * 0.3); break;
+          case 2: this.boss.isVulnerable = Math.sin(this.phaseTimer * 2) > 0.5; break;
+          default: this.boss.isVulnerable = Math.floor(this.phaseTimer) % 4 === 0; break;
       }
+
       if (this.boss.shootTimer <= 0) {
-          const burst = 12 + this.currentMapIndex * 2;
-          for(let i = 0; i < burst; i++) {
-              const angle = (Math.PI / (burst-1)) * i;
-              const bullet = new EggBlasterBullet(
-                  {x: this.boss.position.x, y: this.boss.position.y + 80},
-                  {x: Math.cos(angle - Math.PI) * 550, y: Math.sin(angle) * 550 + 200},
-                  1, 'enemy', true
-              );
-              bullet.radius *= this.worldScale;
-              this.bullets.push(bullet);
-          }
-          this.boss.shootTimer = 6.0; 
+          this.fireBossWeapon();
+          this.boss.shootTimer = 4.5 + Math.random() * 1.5; 
           audio.playShoot();
       }
+  }
+
+  private fireBossWeapon() {
+    if (!this.boss) return;
+    const px = this.boss.position.x;
+    const py = this.boss.position.y + 120;
+    
+    // Boss dùng WeaponSystem với level tăng dần theo Map
+    const bossLevel = 4 + this.currentMapIndex * 2;
+    const projectiles = WeaponSystem.fire(px, py, this.boss.bossWeapon, bossLevel, 'enemy', this.boss.themeColor);
+    
+    projectiles.forEach(proj => {
+        proj.isEnemy = true;
+        proj.velocity.y *= -1.3; // Đạn bắn ngược xuống dưới
+        proj.velocity.x *= 1.3;
+        proj.radius *= this.worldScale * 1.6; // Đạn boss uy lực hơn
+        this.bullets.push(proj);
+    });
   }
 
   private handleShooting(p: Player, dt: number, input: any) {
@@ -285,7 +313,7 @@ export class GameEngine {
                 this.boss.hp -= b.damage; this.boss.hit();
                 if (this.boss.hp <= 0) this.winMap();
             } else {
-                this.spawnParticles(b.position, '#22d3ee', 5); audio.playHit();
+                this.spawnParticles(b.position, this.boss.themeColor, 5); audio.playHit();
             }
         }
       } else {
@@ -392,14 +420,11 @@ export class GameEngine {
     audio.playExplosion();
     this.spawnParticles(e.position, e.color, 25, 2.5);
     
-    // Tỉ lệ rơi vật phẩm (25%)
     if (Math.random() < 0.25) {
         const r = Math.random();
         let kind = PowerUpType.WEAPON;
-        
-        if (r < 0.25) kind = PowerUpType.HEART; // 25% trong số rơi đồ là Heart
-        else if (r < 0.5) kind = PowerUpType.POWER_BOOST; // 25% trong số rơi đồ là Power Booster
-        
+        if (r < 0.25) kind = PowerUpType.HEART; 
+        else if (r < 0.5) kind = PowerUpType.POWER_BOOST; 
         const pu = new PowerUp({...e.position}, kind);
         pu.radius *= this.worldScale;
         this.powerups.push(pu);
@@ -410,15 +435,9 @@ export class GameEngine {
       p.lives--; this.screenShake = 60; audio.playExplosion();
       this.spawnParticles(p.position, p.glowColor, 60, 2.0);
       this.spawnParticles(p.position, '#ffffff', 20, 3.0);
-      
-      // Thực thi luật Death Penalty
       p.applyDeathPenalty();
-
-      if (p.lives > 0) {
-          this.respawnPlayer(p);
-      } else {
-          p.state = PlayerState.DEAD;
-      }
+      if (p.lives > 0) this.respawnPlayer(p);
+      else p.state = PlayerState.DEAD;
   }
 
   private respawnPlayer(p: Player) {
@@ -426,28 +445,17 @@ export class GameEngine {
       p.respawnTimer = 1.5; 
       p.position.x = CANVAS_WIDTH / 2;
       p.position.y = CANVAS_HEIGHT + 150;
-      p.velocity.x = 0;
-      p.velocity.y = 0;
+      p.velocity.x = 0; p.velocity.y = 0;
       p.invulnerableTime = 3.0; 
   }
 
   private collectPowerup(p: Player, pu: PowerUp) {
     audio.playPowerup();
-    if (pu.kind === PowerUpType.HEART) { 
-        p.lives++; 
-    } 
-    else if (pu.kind === PowerUpType.POWER_BOOST) {
-        // Tăng level đạn hiện tại, không đổi vũ khí
-        p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
-    }
+    if (pu.kind === PowerUpType.HEART) p.lives++; 
+    else if (pu.kind === PowerUpType.POWER_BOOST) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
     else {
-        if (p.weaponType === pu.weaponType) {
-          p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
-        } else {
-          p.weaponType = pu.weaponType;
-          // Note: Giữ nguyên weaponLevel khi đổi loại vũ khí từ PowerUp màu (nếu đó là ý đồ của người dùng)
-          // Thường thì nhặt súng mới sẻ reset level hoặc giữ nguyên tùy game feel.
-        }
+        if (p.weaponType === pu.weaponType) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
+        else p.weaponType = pu.weaponType;
     }
   }
 

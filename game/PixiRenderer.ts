@@ -140,6 +140,7 @@ export class PixiRenderer {
                 const cfg = ENEMY_VISUAL_CONFIG[e.type];
                 const isFlashing = e.flashFrame > 0;
                 const isHint = e.state === EnemyState.ENTRY;
+                const isBoss = entity instanceof Boss;
                 
                 const bobY = Math.sin(e.stateTimer * 4) * 3;
                 const squash = 1 + Math.sin(e.stateTimer * 8) * 0.02;
@@ -147,7 +148,7 @@ export class PixiRenderer {
 
                 container.x = e.position.x;
                 container.y = e.position.y + bobY;
-                const baseScale = entity instanceof Boss ? 6 : 1.15;
+                const baseScale = isBoss ? 6 : 1.15;
                 container.scale.set(stretch * baseScale, squash * baseScale);
                 container.alpha = e.opacity;
 
@@ -158,6 +159,7 @@ export class PixiRenderer {
                 const rightWing = container.getChildByName('rightWing') as PIXI.Container;
                 const comb = container.getChildByName('comb') as PIXI.Graphics;
                 const body = container.getChildByName('body') as PIXI.Graphics;
+                const face = container.getChildByName('face') as PIXI.Container;
 
                 if (leftWing) {
                     leftWing.getChildByName('primary')!.rotation = -(flap * 1.1);
@@ -172,10 +174,28 @@ export class PixiRenderer {
                 if (comb) {
                     comb.rotation = combWobble;
                     comb.visible = !isHint;
+                    // Nâng cấp mào thành vương miện nếu là Boss
+                    if (isBoss) {
+                        comb.clear()
+                            .moveTo(-18, -10).lineTo(-24, -30).lineTo(-12, -20)
+                            .lineTo(-6, -37).lineTo(0, -22).lineTo(6, -37)
+                            .lineTo(12, -20).lineTo(24, -30).lineTo(18, -10).closePath()
+                            .fill(0xfbbf24).stroke({ width: 2, color: 0x78350f });
+                    }
                 }
                 if (body) {
                     const baseColor = isHint ? 0x94a3b8 : PIXI.Color.shared.setValue(cfg.bodyColor).toNumber();
                     body.tint = isFlashing ? 0xffffff : baseColor;
+                }
+
+                if (face && isBoss) {
+                    const beak = face.getChildByName('beak') as PIXI.Graphics;
+                    if (beak) {
+                        // Vẽ mỏ vàng kim cho Pixi Boss
+                        beak.clear()
+                            .roundRect(-14, 2, 28, 16, 8).fill(0xfbbf24)
+                            .stroke({ width: 3, color: 0x78350f });
+                    }
                 }
                 
                 const hpBar = container.getChildByName('hpBar') as PIXI.Container;
@@ -255,10 +275,15 @@ export class PixiRenderer {
                 .fill(0xef4444).stroke({ width: 3, color: 0x020617 });
             container.addChild(comb);
 
-            const face = new PIXI.Graphics();
-            face.circle(-14, -6, 12).circle(14, -6, 12).fill(0xffffff).stroke({ width: 3, color: 0x020617 });
-            face.circle(-12, -4, 5).circle(12, -4, 5).fill(0x020617);
-            face.moveTo(-10, 8).quadraticCurveTo(0, 22, 10, 8).quadraticCurveTo(0, 4, -10, 8).fill(0xfacc15).stroke({ width: 2, color: 0x020617 });
+            const face = new PIXI.Container(); face.name = 'face';
+            const eyes = new PIXI.Graphics();
+            eyes.circle(-14, -6, 12).circle(14, -6, 12).fill(0xffffff).stroke({ width: 3, color: 0x020617 });
+            eyes.circle(-12, -4, 5).circle(12, -4, 5).fill(0x020617);
+            
+            const beak = new PIXI.Graphics(); beak.name = 'beak';
+            beak.moveTo(-10, 8).quadraticCurveTo(0, 22, 10, 8).quadraticCurveTo(0, 4, -10, 8).fill(0xfacc15).stroke({ width: 2, color: 0x020617 });
+            
+            face.addChild(eyes, beak);
             container.addChild(face);
 
             const hpBar = new PIXI.Container(); hpBar.name = 'hpBar'; hpBar.y = -65;

@@ -30,16 +30,26 @@ const BLASTER_TABLE: Record<number, WeaponStats> = {
 };
 
 const SHOTGUN_TABLE: Record<number, WeaponStats> = {
-  1: { bullets: 3, damage: 6, hz: 1.8 }, 2: { bullets: 5, damage: 6.5, hz: 1.9 },
-  3: { bullets: 7, damage: 7, hz: 2.0 }, 4: { bullets: 7, damage: 7.5, hz: 2.1 },
-  5: { bullets: 9, damage: 8, hz: 2.2 }, 6: { bullets: 11, damage: 8.5, hz: 2.3 },
-  7: { bullets: 11, damage: 9, hz: 2.4 }, 8: { bullets: 13, damage: 9.5, hz: 2.5 },
-  9: { bullets: 15, damage: 10, hz: 2.6 }, 10: { bullets: 15, damage: 11, hz: 2.7 },
-  11: { bullets: 17, damage: 12, hz: 2.8 }, 12: { bullets: 19, damage: 13, hz: 2.9 },
-  13: { bullets: 19, damage: 14, hz: 3.0 }, 14: { bullets: 21, damage: 15, hz: 3.1 },
-  15: { bullets: 23, damage: 16, hz: 3.2 }, 16: { bullets: 25, damage: 17, hz: 3.3 },
-  17: { bullets: 25, damage: 18, hz: 3.4 }, 18: { bullets: 27, damage: 19, hz: 3.5 },
-  19: { bullets: 29, damage: 20, hz: 3.6 }, 20: { bullets: 31, damage: 22, hz: 3.8 },
+  1:  { bullets: 2,  damage: 6,   hz: 1.8 },
+  2:  { bullets: 3,  damage: 6.5, hz: 1.9 },
+  3:  { bullets: 4,  damage: 7,   hz: 2.0 },
+  4:  { bullets: 5,  damage: 7.5, hz: 2.1 },
+  5:  { bullets: 6,  damage: 8,   hz: 2.2 },
+  6:  { bullets: 7,  damage: 8.5, hz: 2.3 },
+  7:  { bullets: 8,  damage: 9,   hz: 2.4 },
+  8:  { bullets: 9,  damage: 9.5, hz: 2.5 },
+  9:  { bullets: 10, damage: 10,  hz: 2.6 },
+  10: { bullets: 11, damage: 11,  hz: 2.7 },
+  11: { bullets: 12, damage: 12,  hz: 2.8 },
+  12: { bullets: 13, damage: 13,  hz: 2.9 },
+  13: { bullets: 14, damage: 14,  hz: 3.0 },
+  14: { bullets: 15, damage: 15,  hz: 3.1 },
+  15: { bullets: 16, damage: 16,  hz: 3.2 },
+  16: { bullets: 17, damage: 17,  hz: 3.3 },
+  17: { bullets: 18, damage: 18,  hz: 3.4 },
+  18: { bullets: 19, damage: 19,  hz: 3.5 },
+  19: { bullets: 20, damage: 20,  hz: 3.6 },
+  20: { bullets: 21, damage: 22,  hz: 3.8 },
 };
 
 const HELIX_TABLE: Record<number, WeaponStats> = {
@@ -113,7 +123,10 @@ export class WeaponSystem {
     const projectiles: Projectile[] = [];
     const speed = wConfig.speed;
     const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.p1Primary ? wConfig.color : playerColor)));
-    const shootY = py - 15;
+    
+    // Laser bắn từ mũi súng cao hẳn lên để không bị đè lên thân cockpit
+    const shootY = type === WeaponType.LASER ? py - 75 : py - 15;
+    
     const count = stats.bullets;
     const dmg = stats.damage;
 
@@ -149,13 +162,12 @@ export class WeaponSystem {
     }
     else if (type === WeaponType.LASER) {
       const width = 6 + (level * 1.5);
-      // Main Beam
       projectiles.push(new PhotonLaser({x: px, y: shootY}, {x: 0, y: -speed}, dmg, bulletColor, playerId, width));
       
-      // Beam Split (Lv 15+)
       if (level >= 15) {
-          projectiles.push(new PhotonLaser({x: px - 15, y: shootY}, {x: -300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
-          projectiles.push(new PhotonLaser({x: px + 15, y: shootY}, {x: 300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
+          // Nòng súng phụ cũng bắn cao hơn
+          projectiles.push(new PhotonLaser({x: px - 35, y: shootY + 30}, {x: -300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
+          projectiles.push(new PhotonLaser({x: px + 35, y: shootY + 30}, {x: 300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
       }
     }
     return projectiles;

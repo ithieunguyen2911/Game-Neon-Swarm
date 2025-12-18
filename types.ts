@@ -11,6 +11,7 @@ export enum GameState {
   LEVEL_COMPLETE = 'LEVEL_COMPLETE',
   GAME_OVER = 'GAME_OVER',
   SETTINGS = 'SETTINGS',
+  GALLERY = 'GALLERY', // Trạng thái xem danh sách Boss
 }
 
 export enum PlayerState {

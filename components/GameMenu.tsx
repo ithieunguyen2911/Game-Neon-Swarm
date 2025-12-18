@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Play, Users, User } from 'lucide-react';
+import { Play, Users, User, ShieldAlert } from 'lucide-react';
 import { COLOR_PALETTE } from '../constants';
 
 interface GameMenuProps {
@@ -11,6 +11,7 @@ interface GameMenuProps {
     setP2ColorIdx: (idx: number) => void;
     onStartSolo: () => void;
     onStartCoop: () => void;
+    onOpenGallery: () => void;
 }
 
 export const GameMenu: React.FC<GameMenuProps> = ({
@@ -20,7 +21,8 @@ export const GameMenu: React.FC<GameMenuProps> = ({
     setP1ColorIdx,
     setP2ColorIdx,
     onStartSolo,
-    onStartCoop
+    onStartCoop,
+    onOpenGallery
 }) => {
     return (
         <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center text-white z-40 p-8">
@@ -79,8 +81,17 @@ export const GameMenu: React.FC<GameMenuProps> = ({
                 </div>
             </div>
             
-            <div className="mt-12 text-neutral-600 font-mono text-sm uppercase tracking-[0.6em] animate-pulse">
-                Current Record: {highScore.toLocaleString()} pts
+            <div className="mt-12 flex flex-col items-center gap-6">
+                <button 
+                    onClick={onOpenGallery}
+                    className="flex items-center gap-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 px-8 py-4 rounded-full font-black italic text-lg transition-all border border-white/5"
+                >
+                    <ShieldAlert className="w-6 h-6 text-red-500" />
+                    BOSS BESTIARY
+                </button>
+                <div className="text-neutral-600 font-mono text-sm uppercase tracking-[0.6em] animate-pulse">
+                    Current Record: {highScore.toLocaleString()} pts
+                </div>
             </div>
         </div>
     );

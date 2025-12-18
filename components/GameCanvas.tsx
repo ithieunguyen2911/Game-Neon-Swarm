@@ -12,6 +12,7 @@ import { PlayerHUD, PlayerHUDState } from './PlayerHUD';
 import { GameMenu } from './GameMenu';
 import { PauseOverlay } from './PauseOverlay';
 import { GameOverOverlay } from './GameOverOverlay';
+import { BossBestiary } from './BossBestiary';
 
 const engine = new GameEngine();
 
@@ -179,7 +180,7 @@ export const GameCanvas: React.FC = () => {
           </div>
 
           <div className="absolute top-8 right-8 text-white text-right font-black italic z-10 pointer-events-none">
-            <div className="text-neutral-500 text-sm tracking-widest mb-1 uppercase">WORLD RECORD: {highScore.toLocaleString()}</div>
+            <div className="text-neutral-500 text-sm tracking-widest mb-1 uppercase">WORLD RECORD: {highScore.toLocaleString()} pts</div>
             <div className="text-7xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-400 leading-none drop-shadow-2xl">
                 {score.toLocaleString()}
             </div>
@@ -217,7 +218,12 @@ export const GameCanvas: React.FC = () => {
             setP2ColorIdx={setP2ColorIdx}
             onStartSolo={handleStartSolo}
             onStartCoop={handleStartCoop}
+            onOpenGallery={() => setGameState(GameState.GALLERY)}
         />
+      )}
+
+      {gameState === GameState.GALLERY && (
+        <BossBestiary onClose={() => setGameState(GameState.MENU)} />
       )}
 
       {gameState === GameState.GAME_OVER && (

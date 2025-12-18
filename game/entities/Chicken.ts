@@ -39,7 +39,7 @@ export class Enemy extends Entity {
     this.type = type;
     this.scoreValue = Math.floor(hp * 10);
     this.shootTimer = 4 + Math.random() * 8; 
-    this.stateTimer = Math.random() * Math.PI * 2; // Randomize pha ban đầu
+    this.stateTimer = Math.random() * Math.PI * 2;
   }
 
   setFormationSlot(pos: Vector2, duration: number) {
@@ -127,7 +127,6 @@ export class Enemy extends Entity {
     ctx.save();
     ctx.globalAlpha = this.opacity;
     
-    // 1. Chuyển động sinh học: Bobbing & Squash/Stretch
     const bobY = Math.sin(this.stateTimer * 4) * 3;
     const squash = 1 + Math.sin(this.stateTimer * 8) * 0.02;
     const stretch = 1 - Math.sin(this.stateTimer * 8) * 0.01;
@@ -135,7 +134,6 @@ export class Enemy extends Entity {
     ctx.translate(this.position.x, this.position.y + bobY);
     ctx.scale(stretch * 1.15, squash * 1.15); 
     
-    // Gà luôn hướng về phía trước, không xoay 360 độ theo hướng bay
     this.drawBiologicalChicken(ctx, this.flashFrame > 0, this.state === EnemyState.ENTRY);
     ctx.restore();
 
@@ -171,47 +169,37 @@ export class Enemy extends Entity {
 
   protected drawBiologicalChicken(ctx: CanvasRenderingContext2D, isFlashing: boolean, isHint: boolean) {
     const cfg = ENEMY_VISUAL_CONFIG[this.type];
-    const flap = Math.sin(this.wingFlap); // -1 to 1
+    const flap = Math.sin(this.wingFlap);
     const bodyColor = isHint ? '#94a3b8' : (isFlashing ? '#ffffff' : cfg.bodyColor);
     const wingColor = isHint ? '#64748b' : (isFlashing ? '#ffffff' : cfg.wingColor);
 
-    // 1. Cánh 3 tầng (Vẽ dưới thân)
     [-1, 1].forEach(dir => {
       this.drawThreeLayerWing(ctx, dir, flap, wingColor, isHint);
     });
 
-    // 2. Thân giọt nước (Teardrop Body - Đầu nhỏ, Ngực phình, Bụng tròn)
     ctx.fillStyle = bodyColor;
     ctx.beginPath();
-    // Đầu
     ctx.ellipse(0, -28, 15, 13, 0, 0, Math.PI * 2);
-    // Cổ xuống Ngực
     ctx.moveTo(-13, -18);
     ctx.quadraticCurveTo(-28, -2, -26, 18);
-    // Bụng tròn
     ctx.quadraticCurveTo(-22, 38, 0, 40);
     ctx.quadraticCurveTo(22, 38, 26, 18);
-    // Ngực phải lên Cổ
     ctx.quadraticCurveTo(28, -2, 13, -18);
     ctx.closePath();
     ctx.fill();
     drawOutline(ctx, isHint ? 2 : 4, isHint ? '#1e293b' : '#020617');
 
-    // 3. Mào Gà (Jelly effect / Secondary Motion)
     if (!isHint) {
         this.drawAdvancedComb(ctx);
     }
 
-    // 4. Chi tiết mặt (Eyes, Beak, Feet)
     if (!isHint) {
-        // Mắt
         ctx.fillStyle = '#ffffff';
         ctx.beginPath(); ctx.arc(-14, -6, 12, 0, Math.PI * 2); ctx.arc(14, -6, 12, 0, Math.PI * 2); ctx.fill();
         drawOutline(ctx, 3);
         ctx.fillStyle = (cfg.eyeGlow && Math.sin(Date.now() / 150) > 0.5) ? '#ef4444' : '#020617';
         ctx.beginPath(); ctx.arc(-12, -4, 5, 0, Math.PI * 2); ctx.arc(12, -4, 5, 0, Math.PI * 2); ctx.fill();
 
-        // Mỏ Bezier
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
         ctx.moveTo(-10, 8);
@@ -220,7 +208,6 @@ export class Enemy extends Entity {
         ctx.fill();
         drawOutline(ctx, 2.5);
 
-        // Chân (Feet)
         ctx.fillStyle = '#facc15';
         ctx.beginPath();
         ctx.roundRect(-20, 38, 14, 6, 3); ctx.roundRect(6, 38, 14, 6, 3);
@@ -231,11 +218,8 @@ export class Enemy extends Entity {
 
   private drawThreeLayerWing(ctx: CanvasRenderingContext2D, dir: number, flap: number, color: string, isHint: boolean) {
     ctx.save();
-    ctx.translate(dir * 10, 0); // Gốc cánh nối vào thân
-
-    // Vẽ từng tầng với độ trễ và biên độ khác nhau
+    ctx.translate(dir * 10, 0); 
     
-    // Layer 3: Coverts (Gốc cánh) - Đập nhẹ nhất
     ctx.save();
     ctx.rotate(dir * flap * 0.4);
     ctx.fillStyle = color;
@@ -245,7 +229,6 @@ export class Enemy extends Entity {
     drawOutline(ctx, isHint ? 1.5 : 2.5, isHint ? '#1e293b' : '#020617');
     ctx.restore();
 
-    // Layer 2: Secondary feathers (Tầng giữa) - Đập vừa
     ctx.save();
     ctx.rotate(dir * flap * 0.7);
     ctx.fillStyle = color;
@@ -258,7 +241,6 @@ export class Enemy extends Entity {
     drawOutline(ctx, isHint ? 1.5 : 3, isHint ? '#1e293b' : '#020617');
     ctx.restore();
 
-    // Layer 1: Primary feathers (Tầng dài nhất) - Đập mạnh nhất
     ctx.save();
     ctx.rotate(dir * flap * 1.1);
     ctx.fillStyle = color;
@@ -283,7 +265,6 @@ export class Enemy extends Entity {
     ctx.fillStyle = '#ef4444';
     ctx.beginPath();
     ctx.moveTo(-12, 0);
-    // 3 chóp mào bất đối xứng tự nhiên
     ctx.quadraticCurveTo(-10, -22, -4, -14);
     ctx.quadraticCurveTo(0, -30, 6, -18);
     ctx.quadraticCurveTo(14, -28, 18, -10);
@@ -292,48 +273,5 @@ export class Enemy extends Entity {
     ctx.fill();
     drawOutline(ctx, 3);
     ctx.restore();
-  }
-}
-
-export class Boss extends Enemy {
-  isVulnerable: boolean = false;
-  bossName: string;
-  constructor(pos: Vector2, hp: number, name: string, zone: ZoneType) {
-    super(pos, hp, 130, zone, EnemyType.ELITE);
-    this.bossName = name;
-    this.state = EnemyState.FORMATION;
-  }
-  update(dt: number) {
-    super.update(dt);
-    this.position.x = CANVAS_WIDTH / 2 + Math.sin(this.stateTimer * 0.8) * (CANVAS_WIDTH * 0.35);
-    this.position.y = 220 + Math.cos(this.stateTimer * 0.4) * 100;
-  }
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.save(); ctx.translate(this.position.x, this.position.y); ctx.scale(6.0, 6.0); 
-    if (!this.isVulnerable) {
-        ctx.save(); ctx.beginPath(); ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
-        ctx.arc(0, 0, 50, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-        ctx.globalAlpha = 0.1 + Math.sin(this.stateTimer * 5) * 0.05;
-        ctx.fillStyle = '#22d3ee'; ctx.fill(); ctx.restore();
-    }
-    this.drawBiologicalChicken(ctx, this.flashFrame > 0, false);
-    // Boss Crown
-    ctx.fillStyle = '#fbbf24'; ctx.shadowBlur = 15; ctx.shadowColor = '#fbbf24';
-    ctx.beginPath(); ctx.moveTo(-14, -40); ctx.lineTo(-20, -55); ctx.lineTo(-8, -48); 
-    ctx.lineTo(0, -65); ctx.lineTo(8, -48); ctx.lineTo(20, -55); ctx.lineTo(14, -40); ctx.fill();
-    drawOutline(ctx, 1); ctx.restore();
-    this.drawBossHpBar(ctx);
-  }
-  private drawBossHpBar(ctx: CanvasRenderingContext2D) {
-      const barWidth = 1200; const x = (CANVAS_WIDTH - barWidth) / 2; const y = 80;
-      ctx.fillStyle = '#0f172a'; ctx.fillRect(x, y, barWidth, 32);
-      const hpRatio = Math.max(0, this.hp / this.maxHp);
-      const grad = ctx.createLinearGradient(x, 0, x + barWidth, 0);
-      grad.addColorStop(0, '#ef4444'); grad.addColorStop(1, '#f87171');
-      ctx.fillStyle = this.isVulnerable ? '#ffffff' : grad;
-      ctx.fillRect(x + 4, y + 4, (barWidth - 8) * hpRatio, 24);
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.strokeRect(x, y, barWidth, 32);
-      ctx.fillStyle = 'white'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(this.bossName, CANVAS_WIDTH / 2, y - 18);
   }
 }
