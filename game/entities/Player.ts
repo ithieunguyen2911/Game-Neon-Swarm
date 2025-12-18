@@ -19,6 +19,12 @@ export class Player extends Entity {
   state: PlayerState = PlayerState.ALIVE;
   respawnTimer = 0;
 
+  // Thuộc tính Overload mới
+  overloadValue = 0; // 0 - 100
+  isOverheated = false;
+  private readonly COOLDOWN_RATE = 45; // Tốc độ giảm nhiệt mỗi giây (mặc định)
+  private readonly RECOVERY_THRESHOLD = 0; // Phải về 0% mới hết overheat
+
   tilt = 0;
   idleTimer = 0;
 
@@ -47,13 +53,15 @@ export class Player extends Entity {
     return 1;
   }
 
-  // Logic penalty khi chết: giảm 2 cấp, nếu là 1 hoặc 2 thì về 1
   applyDeathPenalty() {
     if (this.weaponLevel <= 2) {
       this.weaponLevel = 1;
     } else {
       this.weaponLevel -= 2;
     }
+    // Khi chết thì reset nhiệt độ
+    this.overloadValue = 0;
+    this.isOverheated = false;
   }
 
   handleInput(dt: number, input: PlayerInput, zone: ZoneType) {
@@ -102,6 +110,14 @@ export class Player extends Entity {
     this.idleTimer += dt;
     if (this.invulnerableTime > 0) this.invulnerableTime -= dt;
 
+    // Logic xử lý nguội dần (Cooling down)
+    const multiplier = this.isOverheated ? 0.7 : 1.0; // Overheated thì nguội chậm hơn một chút để phạt
+    this.overloadValue = Math.max(0, this.overloadValue - this.COOLDOWN_RATE * multiplier * dt);
+    
+    if (this.isOverheated && this.overloadValue <= this.RECOVERY_THRESHOLD) {
+      this.isOverheated = false;
+    }
+
     const targetTilt = this.velocity.x * 0.0012;
     this.tilt = this.tilt * 0.85 + targetTilt * 0.15;
 
@@ -130,6 +146,18 @@ export class Player extends Entity {
     ctx.translate(this.position.x, this.position.y + bobbing);
     ctx.rotate(this.tilt);
     ctx.scale(baseScale, baseScale);
+
+    // Hiệu ứng cảnh báo quá nhiệt trên chính thân máy bay
+    if (this.overloadValue > 70) {
+        ctx.shadowBlur = 10 + (this.overloadValue - 70);
+        ctx.shadowColor = '#ef4444';
+        if (this.isOverheated) {
+            ctx.fillStyle = `rgba(239, 68, 68, ${0.2 + Math.sin(Date.now() / 50) * 0.1})`;
+            ctx.beginPath();
+            ctx.arc(0, 0, 50, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
 
     this.drawAfterburners(ctx);
     this.drawShipBody(ctx);

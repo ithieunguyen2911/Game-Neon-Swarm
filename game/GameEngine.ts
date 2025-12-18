@@ -222,11 +222,8 @@ export class GameEngine {
 
   private spawnBoss() {
       const map = MAP_PROGRESSION[this.currentMapIndex];
-      
-      // Xác định màu sắc và vũ khí dựa trên theme của Map
       const themeColors = ['#22d3ee', '#f97316', '#22c55e', '#ffffff', '#a855f7', '#10b981', '#fb7185', '#fbbf24', '#f87171', '#ffffff'];
       const bossWeapons = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER, WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER];
-      
       const themeColor = themeColors[this.currentMapIndex % themeColors.length];
       const weapon = bossWeapons[this.currentMapIndex % bossWeapons.length];
 
@@ -245,8 +242,6 @@ export class GameEngine {
 
   private updateBossLogic(dt: number) {
       if (!this.boss) return;
-      
-      // Logic Vulnerability tùy Map để tạo độ khó khác nhau
       switch(this.currentMapIndex) {
           case 0: this.boss.isVulnerable = this.boss.shootTimer > 3.0; break;
           case 1: this.boss.isVulnerable = Math.abs(this.boss.position.x - CANVAS_WIDTH/2) > (CANVAS_WIDTH * 0.3); break;
@@ -265,16 +260,14 @@ export class GameEngine {
     if (!this.boss) return;
     const px = this.boss.position.x;
     const py = this.boss.position.y + 120;
-    
-    // Boss dùng WeaponSystem với level tăng dần theo Map
     const bossLevel = 4 + this.currentMapIndex * 2;
     const projectiles = WeaponSystem.fire(px, py, this.boss.bossWeapon, bossLevel, 'enemy', this.boss.themeColor);
     
     projectiles.forEach(proj => {
         proj.isEnemy = true;
-        proj.velocity.y *= -1.3; // Đạn bắn ngược xuống dưới
+        proj.velocity.y *= -1.3; 
         proj.velocity.x *= 1.3;
-        proj.radius *= this.worldScale * 1.6; // Đạn boss uy lực hơn
+        proj.radius *= this.worldScale * 1.6; 
         this.bullets.push(proj);
     });
   }
@@ -282,7 +275,8 @@ export class GameEngine {
   private handleShooting(p: Player, dt: number, input: any) {
     let timer = this.fireTimer.get(p.id) || 0;
     timer -= dt;
-    if (input.shooting && timer <= 0) {
+
+    if (input.shooting && timer <= 0 && !p.isOverheated) {
       const newProjectiles = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
       newProjectiles.forEach(proj => {
           proj.radius *= this.worldScale; 
@@ -290,6 +284,17 @@ export class GameEngine {
       });
       this.bullets.push(...newProjectiles);
       audio.playShoot();
+      
+      // Cập nhật mức nhiệt khi bắn
+      const heatGain = WeaponSystem.getOverloadPerShot(p.weaponType, p.weaponLevel);
+      p.overloadValue += heatGain;
+      
+      if (p.overloadValue >= 100) {
+          p.overloadValue = 100;
+          p.isOverheated = true;
+          audio.playExplosion(); // Âm thanh báo hiệu lỗi hệ thống
+      }
+
       timer = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
     }
     this.fireTimer.set(p.id, timer);
@@ -416,7 +421,6 @@ export class GameEngine {
 
   private killEnemy(e: Enemy) {
     this.score += e.scoreValue; this.comboCount++; this.comboTimer = 1.2;
-    // Đã xóa hiệu ứng screenShake ở đây để giữ màn hình ổn định khi tiêu diệt quái thường
     audio.playExplosion();
     this.spawnParticles(e.position, e.color, 25, 2.5);
     
@@ -479,8 +483,10 @@ export class GameEngine {
   }
 
   cullEntities() {
-    this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -250 && b.position.y < CANVAS_HEIGHT + 250);
-    this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 350);
+    // Thu hẹp phạm vi xóa đạn từ 250px xuống 100px để CPU xử lý ít thực thể off-screen hơn
+    this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -100 && b.position.y < CANVAS_HEIGHT + 100);
+    // Thu hẹp phạm vi xóa kẻ địch
+    this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 150);
     this.explosions = this.explosions.filter(exp => !exp.isDead);
     this.particles = this.particles.filter(p => !p.isDead);
     this.powerups = this.powerups.filter(p => !p.isDead);

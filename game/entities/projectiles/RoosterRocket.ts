@@ -12,7 +12,7 @@ export class RoosterRocket extends Projectile {
     private turnSpeed: number = 2.8;
     private phase: 'SWERVE' | 'HOMING' | 'BOOST' = 'SWERVE';
     private targetScanTimer: number = 0;
-    private maxLife: number = 2.0; 
+    private maxLife: number = 1.5; 
     
     private trail: Vector2[] = [];
     private maxTrailLength: number = 30; 
@@ -144,7 +144,7 @@ export class RoosterRocket extends Projectile {
 
         // Chi tiết cơ khí trên thân
         ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.02;
         ctx.beginPath(); ctx.moveTo(-w/2, 0); ctx.lineTo(w/2, 0); ctx.stroke();
         
         ctx.restore();

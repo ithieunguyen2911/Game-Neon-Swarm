@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { User, Users, Skull, Heart, Zap } from 'lucide-react';
+import { User, Users, Skull, Heart, Zap, ThermometerSnowflake, AlertTriangle } from 'lucide-react';
 import { WeaponType } from '../types';
 import { MAX_WEAPON_LEVEL } from '../constants';
 
@@ -12,6 +12,8 @@ export interface PlayerHUDState {
     weaponType: WeaponType;
     primaryColor: string;
     glowColor: string;
+    overload: number;
+    isOverheated: boolean;
 }
 
 interface PlayerHUDProps {
@@ -21,6 +23,16 @@ interface PlayerHUDProps {
 }
 
 export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, isLeft, label }) => {
+    // Màu sắc thanh Overload dựa trên mức nhiệt
+    const getOverloadColor = () => {
+        if (state.isOverheated) return '#ef4444'; // Đỏ rực khi quá nhiệt
+        if (state.overload > 70) return '#f97316'; // Cam khi sắp quá tải
+        if (state.overload > 40) return '#facc15'; // Vàng khi nóng
+        return '#22d3ee'; // Xanh cyan khi mát
+    };
+
+    const overloadColor = getOverloadColor();
+
     return (
         <div className={`absolute bottom-8 ${isLeft ? 'left-8' : 'right-8'} flex flex-col ${isLeft ? 'items-start' : 'items-end'} pointer-events-none z-10`}>
             <div className={`text-2xl font-black italic mb-2 flex items-center gap-2`} style={{ color: state.glowColor }}>
@@ -54,7 +66,33 @@ export const PlayerHUD: React.FC<PlayerHUDProps> = ({ state, isLeft, label }) =>
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-col gap-2">
+
+                    <div className="flex flex-col gap-3">
+                        {/* Overload Bar (Thanh Quá Tải) */}
+                        <div className={`flex flex-col ${isLeft ? 'items-start' : 'items-end'} gap-1 w-64`}>
+                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                {state.isOverheated ? (
+                                    <span className="text-red-500 flex items-center gap-1 animate-pulse">
+                                        <AlertTriangle className="w-3 h-3" /> SYSTEM OVERHEATED - RECOVERING
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1">
+                                        <ThermometerSnowflake className="w-3 h-3" /> Weapon Heat Core
+                                    </span>
+                                )}
+                            </div>
+                            <div className="w-full h-3 bg-neutral-900 rounded-full border border-neutral-800 overflow-hidden relative shadow-inner">
+                                <div 
+                                    className={`h-full transition-all duration-75 ${state.isOverheated ? 'animate-pulse' : ''}`}
+                                    style={{ 
+                                        width: `${state.overload}%`, 
+                                        backgroundColor: overloadColor,
+                                        boxShadow: `0 0 15px ${overloadColor}88`
+                                    }}
+                                />
+                            </div>
+                        </div>
+
                         {/* Weapon Level Bar */}
                         <div className={`flex items-center gap-3 ${!isLeft ? 'flex-row-reverse' : ''}`}>
                             <Zap className={`w-5 h-5`} style={{ color: state.glowColor }} />

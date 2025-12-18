@@ -34,8 +34,8 @@ export const GameCanvas: React.FC = () => {
   const [p1ColorIdx, setP1ColorIdx] = useState(0);
   const [p2ColorIdx, setP2ColorIdx] = useState(1);
 
-  const [p1HUD, setP1HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: true, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[0].primary, glowColor: COLOR_PALETTE[0].glow });
-  const [p2HUD, setP2HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: false, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[1].primary, glowColor: COLOR_PALETTE[1].glow });
+  const [p1HUD, setP1HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: true, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[0].primary, glowColor: COLOR_PALETTE[0].glow, overload: 0, isOverheated: false });
+  const [p2HUD, setP2HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: false, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[1].primary, glowColor: COLOR_PALETTE[1].glow, overload: 0, isOverheated: false });
 
   const stopGameLoop = useCallback(() => {
     if (loopRef.current !== null) {
@@ -109,10 +109,10 @@ export const GameCanvas: React.FC = () => {
             setHighScore(engine.highScore);
 
             const p1 = engine.players.get('p1');
-            if (p1) setP1HUD({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true, weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor });
+            if (p1) setP1HUD({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true, weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor, overload: p1.overloadValue, isOverheated: p1.isOverheated });
 
             const p2 = engine.players.get('p2');
-            if (p2) setP2HUD({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true, weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor });
+            if (p2) setP2HUD({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true, weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor, overload: p2.overloadValue, isOverheated: p2.isOverheated });
             else setP2HUD(prev => ({ ...prev, active: false }));
 
             loopRef.current = requestAnimationFrame(loop);
