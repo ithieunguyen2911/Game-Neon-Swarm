@@ -1,6 +1,6 @@
 
 import { Player, Bullet, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion } from './Entities';
-import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase } from '../types';
+import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType } from '../types';
 import { 
   CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, ENEMY_SPAWN_RATE_INITIAL,
   ENEMY_BASE_SPEED, ENEMY_SIZE, MAP_PROGRESSION, WEAPON_CONFIGS
@@ -32,7 +32,6 @@ export class GameEngine {
   phaseTimer: number = 0;
   screenShake: number = 0;
 
-  // Player Color Configs
   p1Colors = { primary: COLORS.p1Primary, glow: COLORS.p1Glow };
   p2Colors = { primary: COLORS.p2Primary, glow: COLORS.p2Glow };
 
@@ -200,7 +199,6 @@ export class GameEngine {
     if (input.shooting && timer <= 0) {
       const newBullets = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
       
-      // LASER AUTO-FOCUS INJECTION
       if (p.weaponType === WeaponType.LASER) {
           newBullets.forEach(b => {
              b.target = this.findNearestEnemy(b.position);
@@ -217,7 +215,7 @@ export class GameEngine {
 
   private findNearestEnemy(pos: Vector2): Enemy | null {
       let nearest: Enemy | null = null;
-      let minDist = 800; // Scanning range
+      let minDist = 800; 
       
       if (this.boss && !this.boss.isDead) return this.boss;
 
@@ -236,12 +234,26 @@ export class GameEngine {
 
   private spawnEnemy() {
     const x = Math.random() * (CANVAS_WIDTH - 200) + 100;
-    const isElite = this.currentPhase === MapPhase.ELITE;
-    const hp = (isElite ? 4 : 1) + Math.floor(this.currentMapIndex * 0.8);
+    const isElitePhase = this.currentPhase === MapPhase.ELITE;
+    
+    let type = EnemyType.NORMAL;
+    if (isElitePhase) {
+        type = EnemyType.ELITE;
+    } else if (this.currentMapIndex >= 1 && Math.random() < 0.3) {
+        type = EnemyType.ARMORED;
+    }
+
+    let hpMultiplier = 1;
+    if (type === EnemyType.ARMORED) hpMultiplier = 3;
+    if (type === EnemyType.ELITE) hpMultiplier = 5;
+
+    const baseHp = (isElitePhase ? 4 : 1) + Math.floor(this.currentMapIndex * 0.8);
+    const hp = baseHp * hpMultiplier;
+
     this.enemies.push(new Enemy(
         { x, y: -80 }, 
         { x: (Math.random() - 0.5) * 100, y: ENEMY_BASE_SPEED + (this.currentMapIndex * 25) }, 
-        hp, ENEMY_SIZE, MAP_PROGRESSION[this.currentMapIndex].zone
+        hp, ENEMY_SIZE, MAP_PROGRESSION[this.currentMapIndex].zone, type
     ));
   }
 

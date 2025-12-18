@@ -1,4 +1,3 @@
-
 import { Vector2, WeaponType } from '../types';
 import { WEAPON_CONFIGS, COLORS } from '../constants';
 import { Bullet } from './Entities';
@@ -62,7 +61,6 @@ const ROCKET_TABLE: Record<number, WeaponStats> = {
 };
 
 const LASER_TABLE: Record<number, WeaponStats> = {
-  // Sát thương LASER thấp hơn một chút vì khả năng homing cực mạnh, bắn liên tục (HZ cao)
   1: { bullets: 1, damage: 1.5, hz: 25 }, 2: { bullets: 1, damage: 1.8, hz: 28 },
   3: { bullets: 1, damage: 2.2, hz: 30 }, 4: { bullets: 1, damage: 2.5, hz: 32 },
   5: { bullets: 1, damage: 3.0, hz: 35 }, 6: { bullets: 1, damage: 3.5, hz: 38 },
@@ -106,7 +104,6 @@ export class WeaponSystem {
     
     const bullets: Bullet[] = [];
     const speed = wConfig.speed;
-    // Fix: Changed COLORS.player to COLORS.p1Primary as COLORS.player does not exist.
     const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.p1Primary ? wConfig.color : playerColor)));
     const shootY = py - 15;
     const count = stats.bullets;

@@ -33,6 +33,12 @@ export enum ZoneType {
   ICE = 'ICE'
 }
 
+export enum EnemyType {
+  NORMAL = 'NORMAL',
+  ARMORED = 'ARMORED',
+  ELITE = 'ELITE',
+}
+
 export enum WeaponType {
   BLASTER = 'BLASTER',
   SHOTGUN = 'SHOTGUN',
