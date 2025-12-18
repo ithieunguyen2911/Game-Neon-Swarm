@@ -1,5 +1,6 @@
+
 import { Entity, drawOutline } from './BaseEntity';
-import { ZoneType, WeaponType, PlayerInput } from '../../types';
+import { ZoneType, WeaponType, PlayerInput, PlayerState } from '../../types';
 import {
   PLAYER_SIZE,
   ZONE_CONFIGS,
@@ -15,6 +16,8 @@ export class Player extends Entity {
   weaponLevel = 1;
   invulnerableTime = 0;
   lives = PLAYER_LIVES;
+  state: PlayerState = PlayerState.ALIVE;
+  respawnTimer = 0;
 
   tilt = 0;
   idleTimer = 0;
@@ -36,9 +39,6 @@ export class Player extends Entity {
     this.glowColor = glowColor;
   }
 
-  // ===============================
-  // TIER SYSTEM (1-5)
-  // ===============================
   get tier(): number {
     if (this.weaponLevel >= 20) return 5;
     if (this.weaponLevel >= 15) return 4;
@@ -48,6 +48,8 @@ export class Player extends Entity {
   }
 
   handleInput(dt: number, input: PlayerInput, zone: ZoneType) {
+    if (this.state === PlayerState.RESPAWNING) return;
+
     const acc = { x: 0, y: 0 };
     if (input.left) acc.x -= 1;
     if (input.right) acc.x += 1;
@@ -72,6 +74,22 @@ export class Player extends Entity {
   }
 
   update(dt: number) {
+    if (this.state === PlayerState.RESPAWNING) {
+      this.respawnTimer -= dt;
+      this.invulnerableTime = 0.5; // Giữ trạng thái bất tử ngắn hạn liên tục khi đang bay lên
+
+      // Easing bay lên mượt mà từ dưới đáy
+      const targetY = CANVAS_HEIGHT * 0.82;
+      this.position.y += (targetY - this.position.y) * dt * 3.5;
+      this.tilt = Math.sin(this.respawnTimer * 10) * 0.05;
+
+      if (this.respawnTimer <= 0) {
+        this.state = PlayerState.ALIVE;
+        this.invulnerableTime = 2.5; // 2.5s bất tử sau khi hồi sinh xong
+      }
+      return;
+    }
+
     super.update(dt);
     this.idleTimer += dt;
     if (this.invulnerableTime > 0) this.invulnerableTime -= dt;
@@ -84,10 +102,21 @@ export class Player extends Entity {
   }
 
   draw(ctx: CanvasRenderingContext2D) {
-    if (this.isDead) return;
-    if (this.invulnerableTime > 0 && Math.floor(Date.now() / 60) % 2 === 0) return;
-
+    if (this.isDead || this.state === PlayerState.DEAD) return;
+    
     ctx.save();
+    
+    // Ghost effect khi respawning hoặc invulnerable
+    if (this.state === PlayerState.RESPAWNING) {
+      ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 50) * 0.3;
+    } else if (this.invulnerableTime > 0) {
+      if (Math.floor(Date.now() / 80) % 2 === 0) {
+        ctx.restore();
+        return;
+      }
+      ctx.globalAlpha = 0.7;
+    }
+
     const bobbing = Math.sin(this.idleTimer * 4) * 2;
     const baseScale = 1.1 + this.tier * 0.1;
 
@@ -107,17 +136,12 @@ export class Player extends Entity {
   private drawAfterburners(ctx: CanvasRenderingContext2D) {
     const flicker = Math.random() * 4;
     const tier = this.tier;
-
     ctx.save();
     ctx.shadowBlur = 15 + tier * 5;
     ctx.shadowColor = '#f97316';
     ctx.fillStyle = '#f97316';
-
-    // Động cơ chính
     ctx.beginPath(); ctx.arc(-12, 32, 6 + flicker * 0.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(12, 32, 6 + flicker * 0.5, 0, Math.PI * 2); ctx.fill();
-
-    // Động cơ phụ (Tier 5)
     if (tier >= 5) {
         ctx.fillStyle = '#fbbf24';
         ctx.beginPath(); ctx.arc(-45, 20, 8 + flicker, 0, Math.PI * 2); ctx.fill();
@@ -129,60 +153,28 @@ export class Player extends Entity {
   private drawShipBody(ctx: CanvasRenderingContext2D) {
     const tier = this.tier;
     ctx.fillStyle = this.flashFrame > 0 ? '#ffffff' : this.primaryColor;
-
-    // 1. EXTRA WING STRUCTURES (Tier 4+)
     if (tier >= 4) {
-        ctx.beginPath();
-        ctx.roundRect(-60, 5, 120, 15, 10);
-        ctx.fill();
-        drawOutline(ctx, 3);
+        ctx.beginPath(); ctx.roundRect(-60, 5, 120, 15, 10); ctx.fill(); drawOutline(ctx, 3);
     }
-
-    // 2. MAIN WINGS
-    ctx.beginPath();
-    ctx.roundRect(-40, 0, 80, 26, 8);
-    ctx.fill();
-    drawOutline(ctx, 3);
-
-    // 3. MAIN BODY
-    ctx.beginPath();
-    ctx.ellipse(0, -6, 26, 38, 0, 0, Math.PI * 2);
-    ctx.fill();
-    drawOutline(ctx, 4);
-
-    // 4. COCKPIT
+    ctx.beginPath(); ctx.roundRect(-40, 0, 80, 26, 8); ctx.fill(); drawOutline(ctx, 3);
+    ctx.beginPath(); ctx.ellipse(0, -6, 26, 38, 0, 0, Math.PI * 2); ctx.fill(); drawOutline(ctx, 4);
     const grad = ctx.createLinearGradient(0, -32, 0, 0);
     grad.addColorStop(0, '#ffffff'); grad.addColorStop(1, '#64748b');
     ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.ellipse(0, -20, 14, 18, 0, 0, Math.PI * 2); ctx.fill();
-    drawOutline(ctx, 2);
+    ctx.beginPath(); ctx.ellipse(0, -20, 14, 18, 0, 0, Math.PI * 2); ctx.fill(); drawOutline(ctx, 2);
   }
 
   private drawTierDecorations(ctx: CanvasRenderingContext2D) {
     const tier = this.tier;
     ctx.fillStyle = '#1e293b';
-
-    // Tier 3+: Front fins
     if (tier >= 3) {
-        ctx.beginPath();
-        ctx.moveTo(-10, -38); ctx.lineTo(-18, -25); ctx.lineTo(-10, -15); ctx.closePath();
-        ctx.moveTo(10, -38); ctx.lineTo(18, -25); ctx.lineTo(10, -15); ctx.closePath();
-        ctx.fill();
-        drawOutline(ctx, 2);
+        ctx.beginPath(); ctx.moveTo(-10, -38); ctx.lineTo(-18, -25); ctx.lineTo(-10, -15); ctx.closePath();
+        ctx.moveTo(10, -38); ctx.lineTo(18, -25); ctx.lineTo(10, -15); ctx.closePath(); ctx.fill(); drawOutline(ctx, 2);
     }
-
-    // Tier 5: Heavy Booster Pods
     if (tier >= 5) {
         ctx.fillStyle = this.primaryColor;
-        ctx.beginPath();
-        ctx.roundRect(-55, -5, 20, 40, 10);
-        ctx.roundRect(35, -5, 20, 40, 10);
-        ctx.fill();
-        drawOutline(ctx, 3);
-        
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(-50, 5, 10, 20);
-        ctx.fillRect(40, 5, 10, 20);
+        ctx.beginPath(); ctx.roundRect(-55, -5, 20, 40, 10); ctx.roundRect(35, -5, 20, 40, 10); ctx.fill(); drawOutline(ctx, 3);
+        ctx.fillStyle = '#334155'; ctx.fillRect(-50, 5, 10, 20); ctx.fillRect(40, 5, 10, 20);
     }
   }
 
@@ -190,40 +182,20 @@ export class Player extends Entity {
     const tier = this.tier;
     const pulse = 1 + Math.sin(this.idleTimer * 10) * 0.15;
     const size = 6 + this.weaponLevel * 0.5;
-
     ctx.save();
     ctx.shadowBlur = 15 + tier * 10;
     ctx.shadowColor = this.glowColor;
     ctx.fillStyle = this.glowColor;
-
     ctx.beginPath(); ctx.arc(0, 5, size * pulse, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'white';
-    ctx.beginPath(); ctx.arc(0, 5, size * 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(0, 5, size * 0.4, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
   private drawWeaponBarrels(ctx: CanvasRenderingContext2D) {
     const tier = this.tier;
     ctx.fillStyle = '#0f172a';
-
-    // Tier 2+: Wing Barrels
-    if (tier >= 2) {
-      ctx.fillRect(-45, 10, 10, 15);
-      ctx.fillRect(35, 10, 10, 15);
-      drawOutline(ctx, 1.5);
-    }
-
-    // Tier 3+: Nose Barrels
-    if (tier >= 3) {
-      ctx.fillRect(-6, -42, 4, 10);
-      ctx.fillRect(2, -42, 4, 10);
-    }
-
-    // Tier 5: Quad Wing Cannons
-    if (tier >= 5) {
-      ctx.fillRect(-62, 15, 12, 18);
-      ctx.fillRect(50, 15, 12, 18);
-      drawOutline(ctx, 2);
-    }
+    if (tier >= 2) { ctx.fillRect(-45, 10, 10, 15); ctx.fillRect(35, 10, 10, 15); drawOutline(ctx, 1.5); }
+    if (tier >= 3) { ctx.fillRect(-6, -42, 4, 10); ctx.fillRect(2, -42, 4, 10); }
+    if (tier >= 5) { ctx.fillRect(-62, 15, 12, 18); ctx.fillRect(50, 15, 12, 18); drawOutline(ctx, 2); }
   }
 }

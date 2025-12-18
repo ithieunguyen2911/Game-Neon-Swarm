@@ -1,3 +1,4 @@
+
 import { Vector2 } from '../../types';
 
 export const drawOutline = (ctx: CanvasRenderingContext2D, width: number = 2.5, color: string = '#020617') => {

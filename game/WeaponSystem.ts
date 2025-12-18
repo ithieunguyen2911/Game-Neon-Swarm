@@ -1,6 +1,13 @@
 import { Vector2, WeaponType } from '../types';
 import { WEAPON_CONFIGS, COLORS } from '../constants';
-import { Bullet } from './Entities';
+import { 
+    Projectile, 
+    EggBlasterBullet, 
+    FeatherShotgunBullet, 
+    HelixDNAProjectile, 
+    RoosterRocket, 
+    PhotonLaser 
+} from './entities/Combat';
 
 interface WeaponStats {
   bullets: number;
@@ -97,12 +104,12 @@ export class WeaponSystem {
     level: number,
     playerId: string,
     playerColor: string
-  ): Bullet[] {
+  ): Projectile[] {
     const wConfig = WEAPON_CONFIGS[type];
     const table = this.getTable(type);
     const stats = table[Math.min(20, Math.max(1, level))];
     
-    const bullets: Bullet[] = [];
+    const projectiles: Projectile[] = [];
     const speed = wConfig.speed;
     const bulletColor = type === WeaponType.BLASTER ? '#38bdf8' : (type === WeaponType.LASER ? '#22c55e' : (type === WeaponType.HELIX ? '#a855f7' : (playerColor === COLORS.p1Primary ? wConfig.color : playerColor)));
     const shootY = py - 15;
@@ -110,16 +117,16 @@ export class WeaponSystem {
     const dmg = stats.damage;
 
     if (type === WeaponType.BLASTER) {
-      this.spawnBlasterPattern(bullets, px, shootY, count, dmg, speed, bulletColor, playerId);
+      this.spawnBlasterPattern(projectiles, px, shootY, count, dmg, speed, playerId);
     } 
     else if (type === WeaponType.SHOTGUN) {
       const arc = (Math.PI / 1.5) * (count / 31);
       for(let i=0; i<count; i++) {
         const angle = -Math.PI/2 - (arc/2) + (arc * (i/(count-1 || 1)));
-        bullets.push(new Bullet(
+        projectiles.push(new FeatherShotgunBullet(
           {x: px, y: shootY},
           {x: Math.cos(angle) * speed, y: Math.sin(angle) * speed},
-          WeaponType.SHOTGUN, bulletColor, dmg, playerId
+          dmg, bulletColor, playerId
         ));
       }
     }
@@ -128,71 +135,76 @@ export class WeaponSystem {
       const spacing = 35;
       for (let i = 0; i < pairs; i++) {
           const xOffset = (i - (pairs - 1) / 2) * spacing;
-          const b1 = new Bullet({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId);
-          b1.phase = 0;
-          const b2 = new Bullet({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, WeaponType.HELIX, bulletColor, dmg, playerId);
-          b2.phase = Math.PI; 
-          bullets.push(b1, b2);
+          projectiles.push(new HelixDNAProjectile({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, dmg, bulletColor, playerId, 0));
+          projectiles.push(new HelixDNAProjectile({x: px + xOffset, y: shootY}, {x: 0, y: -speed}, dmg, bulletColor, playerId, Math.PI));
       }
     }
     else if (type === WeaponType.ROCKET) {
       const spreadX = 40;
       for (let i = 0; i < count; i++) {
           const xOffset = (i - (count - 1) / 2) * spreadX;
-          const rocket = new Bullet({x: px + xOffset, y: shootY + Math.abs(xOffset) * 0.2}, {x: xOffset * 2, y: -speed}, WeaponType.ROCKET, bulletColor, dmg, playerId);
-          bullets.push(rocket);
+          projectiles.push(new RoosterRocket({x: px + xOffset, y: shootY + Math.abs(xOffset) * 0.2}, {x: xOffset * 2, y: -speed}, dmg, bulletColor, playerId));
       }
     }
     else if (type === WeaponType.LASER) {
       const width = 6 + (level * 1.5);
-      const laser = new Bullet({x: px, y: shootY}, {x: 0, y: -speed}, WeaponType.LASER, bulletColor, dmg, playerId);
-      laser.width = width;
-      bullets.push(laser);
+      // Main Beam
+      projectiles.push(new PhotonLaser({x: px, y: shootY}, {x: 0, y: -speed}, dmg, bulletColor, playerId, width));
+      
+      // Beam Split (Lv 15+)
+      if (level >= 15) {
+          projectiles.push(new PhotonLaser({x: px - 15, y: shootY}, {x: -300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
+          projectiles.push(new PhotonLaser({x: px + 15, y: shootY}, {x: 300, y: -speed}, dmg * 0.4, bulletColor, playerId, width * 0.5));
+      }
     }
-    return bullets;
+    return projectiles;
   }
 
-  private static spawnBlasterPattern(bullets: Bullet[], px: number, py: number, count: number, dmg: number, speed: number, color: string, id: string) {
+  private static spawnBlasterPattern(projectiles: Projectile[], px: number, py: number, count: number, dmg: number, speed: number, id: string) {
+      const spawn = (x: number, y: number, vx: number, vy: number) => {
+          projectiles.push(new EggBlasterBullet({x, y}, {x: vx, y: vy}, dmg, id));
+      };
+
       switch (count) {
-        case 1: bullets.push(new Bullet({x: px, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id)); break;
+        case 1: spawn(px, py, 0, -speed); break;
         case 2:
-          bullets.push(new Bullet({x: px - 12, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 12, y: py}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px - 12, py, 0, -speed);
+          spawn(px + 12, py, 0, -speed);
           break;
         case 3:
-          bullets.push(new Bullet({x: px, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 20, y: py}, {x: -80, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 20, y: py}, {x: 80, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px, py - 5, 0, -speed);
+          spawn(px - 20, py, -80, -speed);
+          spawn(px + 20, py, 80, -speed);
           break;
         case 4:
-          bullets.push(new Bullet({x: px - 10, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 10, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 25, y: py}, {x: -120, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 25, y: py}, {x: 120, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px - 10, py - 5, 0, -speed);
+          spawn(px + 10, py - 5, 0, -speed);
+          spawn(px - 25, py, -120, -speed);
+          spawn(px + 25, py, 120, -speed);
           break;
         case 5:
-          bullets.push(new Bullet({x: px, y: py - 10}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 15, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 15, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 35, y: py}, {x: -180, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 35, y: py}, {x: 180, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px, py - 10, 0, -speed);
+          spawn(px - 15, py - 5, 0, -speed);
+          spawn(px + 15, py - 5, 0, -speed);
+          spawn(px - 35, py, -180, -speed);
+          spawn(px + 35, py, 180, -speed);
           break;
         case 6:
-          bullets.push(new Bullet({x: px - 8, y: py - 10}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 8, y: py - 10}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 24, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 24, y: py - 5}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 45, y: py}, {x: -240, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 45, y: py}, {x: 240, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px - 8, py - 10, 0, -speed);
+          spawn(px + 8, py - 10, 0, -speed);
+          spawn(px - 24, py - 5, 0, -speed);
+          spawn(px + 24, py - 5, 0, -speed);
+          spawn(px - 45, py, -240, -speed);
+          spawn(px + 45, py, 240, -speed);
           break;
         case 7:
-          bullets.push(new Bullet({x: px, y: py - 15}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 18, y: py - 10}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 18, y: py - 10}, {x: 0, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 32, y: py - 5}, {x: -100, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 32, y: py - 5}, {x: 100, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px - 55, y: py}, {x: -300, y: -speed}, WeaponType.BLASTER, color, dmg, id));
-          bullets.push(new Bullet({x: px + 55, y: py}, {x: 300, y: -speed}, WeaponType.BLASTER, color, dmg, id));
+          spawn(px, py - 15, 0, -speed);
+          spawn(px - 18, py - 10, 0, -speed);
+          spawn(px + 18, py - 10, 0, -speed);
+          spawn(px - 32, py - 5, -100, -speed);
+          spawn(px + 32, py - 5, 100, -speed);
+          spawn(px - 55, py, -300, -speed);
+          spawn(px + 55, py, 300, -speed);
           break;
       }
   }

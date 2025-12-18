@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '../game/GameEngine';
 import { PixiRenderer } from '../game/PixiRenderer';
 import { MAP_PROGRESSION, DEFAULT_CONTROLS, COLOR_PALETTE } from '../constants';
@@ -20,6 +20,7 @@ export const GameCanvas: React.FC = () => {
   const inputHandlerRef = useRef<InputHandler | null>(null);
   const loopRef = useRef<number | null>(null);
   const isMounting = useRef(false);
+  const isPlaying = useRef(false);
   
   const [usePixi, setUsePixi] = useState(false);
   const [gameState, setGameState] = useState<GameState>(engine.gameState);
@@ -33,21 +34,42 @@ export const GameCanvas: React.FC = () => {
   const [p1HUD, setP1HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: true, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[0].primary, glowColor: COLOR_PALETTE[0].glow });
   const [p2HUD, setP2HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: false, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[1].primary, glowColor: COLOR_PALETTE[1].glow });
 
+  const stopGameLoop = useCallback(() => {
+    if (loopRef.current !== null) {
+      cancelAnimationFrame(loopRef.current);
+      loopRef.current = null;
+    }
+    isPlaying.current = false;
+  }, []);
+
+  const cleanupGame = useCallback(() => {
+    stopGameLoop();
+    if (inputHandlerRef.current) {
+        inputHandlerRef.current.destroy();
+        inputHandlerRef.current = null;
+    }
+    engine.dispose();
+    PixiRenderer.getInstance().reset();
+  }, [stopGameLoop]);
+
   useEffect(() => {
-    const pixiContainer = pixiContainerRef.current;
+    if (gameState !== GameState.PLAYING && gameState !== GameState.PAUSED && gameState !== GameState.GAME_OVER) {
+        return;
+    }
+
     const canvas = canvasRef.current;
-    if (!pixiContainer || !canvas) return;
+    const pixiContainer = pixiContainerRef.current;
+    if (!canvas || !pixiContainer) return;
 
     const renderer = PixiRenderer.getInstance();
     const ctx = canvas.getContext('2d');
 
-    const initGame = async () => {
-        if (isMounting.current) return;
-        isMounting.current = true;
+    const startGameLoop = async () => {
+        if (isPlaying.current) return;
+        isPlaying.current = true;
 
-        try {
+        if (usePixi) {
             await renderer.init();
-            
             if (renderer.app && renderer.app.canvas) {
                 const pixiCanvas = renderer.app.canvas as HTMLCanvasElement;
                 if (!pixiContainer.contains(pixiCanvas)) {
@@ -57,49 +79,46 @@ export const GameCanvas: React.FC = () => {
                     pixiCanvas.style.objectFit = 'contain';
                 }
             }
-
-            if (!inputHandlerRef.current) {
-                inputHandlerRef.current = new InputHandler(DEFAULT_CONTROLS, canvas);
-            }
-
-            const loop = () => {
-                engine.update(1/60, inputHandlerRef.current!.state);
-                
-                if (usePixi) {
-                    renderer.sync(engine);
-                    canvas.style.opacity = '0';
-                    pixiContainer.style.opacity = '1';
-                } else if (ctx) {
-                    engine.draw(ctx);
-                    canvas.style.opacity = '1';
-                    pixiContainer.style.opacity = '0';
-                }
-                
-                setGameState(engine.gameState);
-                setScore(engine.score);
-                setMapIdx(engine.currentMapIndex);
-                setHighScore(engine.highScore);
-
-                const p1 = engine.players.get('p1');
-                if (p1) setP1HUD({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true, weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor });
-
-                const p2 = engine.players.get('p2');
-                if (p2) setP2HUD({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true, weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor });
-                else setP2HUD(prev => ({ ...prev, active: false }));
-
-                loopRef.current = requestAnimationFrame(loop);
-            };
-            
-            if (loopRef.current === null) {
-                loopRef.current = requestAnimationFrame(loop);
-            }
-        } catch (err) {
-            console.error("Game loop initialization failed:", err);
-            isMounting.current = false;
         }
+
+        if (!inputHandlerRef.current) {
+            inputHandlerRef.current = new InputHandler(DEFAULT_CONTROLS, canvas);
+        }
+
+        const loop = () => {
+            if (!isPlaying.current) return;
+
+            engine.update(1/60, inputHandlerRef.current!.state);
+            
+            if (usePixi && renderer.app) {
+                renderer.sync(engine);
+                canvas.style.opacity = '0';
+                pixiContainer.style.opacity = '1';
+            } else if (ctx) {
+                engine.draw(ctx);
+                canvas.style.opacity = '1';
+                pixiContainer.style.opacity = '0';
+            }
+            
+            setGameState(engine.gameState);
+            setScore(engine.score);
+            setMapIdx(engine.currentMapIndex);
+            setHighScore(engine.highScore);
+
+            const p1 = engine.players.get('p1');
+            if (p1) setP1HUD({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true, weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor });
+
+            const p2 = engine.players.get('p2');
+            if (p2) setP2HUD({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true, weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor });
+            else setP2HUD(prev => ({ ...prev, active: false }));
+
+            loopRef.current = requestAnimationFrame(loop);
+        };
+        
+        loopRef.current = requestAnimationFrame(loop);
     };
 
-    initGame();
+    startGameLoop();
 
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.code === 'Escape') {
@@ -110,34 +129,28 @@ export const GameCanvas: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-        if (loopRef.current !== null) {
-            cancelAnimationFrame(loopRef.current);
-            loopRef.current = null;
-        }
         window.removeEventListener('keydown', handleKeyDown);
-        renderer.reset();
-        isMounting.current = false;
     };
-  }, [usePixi]);
+  }, [gameState, usePixi]);
 
   const handleStartSolo = () => {
-    PixiRenderer.getInstance().reset();
     engine.startGame(GameMode.OFFLINE_SOLO, 0, COLOR_PALETTE[p1ColorIdx]);
+    setGameState(engine.gameState);
   };
 
   const handleStartCoop = () => {
-    PixiRenderer.getInstance().reset();
     engine.startGame(GameMode.OFFLINE_COOP, 0, COLOR_PALETTE[p1ColorIdx], COLOR_PALETTE[p2ColorIdx]);
+    setGameState(engine.gameState);
   };
 
   const handleQuit = () => {
-    PixiRenderer.getInstance().reset();
-    engine.stopGame();
+    cleanupGame();
+    setGameState(GameState.MENU);
   };
 
   const handleRestart = () => {
-    PixiRenderer.getInstance().reset();
-    engine.stopGame();
+    cleanupGame();
+    setGameState(GameState.MENU);
   };
 
   const currentMap = MAP_PROGRESSION[mapIdx] || MAP_PROGRESSION[0];

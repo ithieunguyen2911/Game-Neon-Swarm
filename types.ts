@@ -13,10 +13,30 @@ export enum GameState {
   SETTINGS = 'SETTINGS',
 }
 
+export enum PlayerState {
+  ALIVE = 'ALIVE',
+  RESPAWNING = 'RESPAWNING',
+  DEAD = 'DEAD'
+}
+
 export enum MapPhase {
   NORMAL = 'NORMAL',
   ELITE = 'ELITE',
   BOSS = 'BOSS'
+}
+
+export enum EnemyState {
+  ENTRY = 'ENTRY',
+  FORMATION = 'FORMATION',
+  DIVE = 'DIVE',
+  RETURN = 'RETURN'
+}
+
+export enum FormationType {
+  GRID = 'GRID',
+  V_SHAPE = 'V_SHAPE',
+  CIRCLE = 'CIRCLE',
+  SNAKE = 'SNAKE'
 }
 
 export enum GameMode {

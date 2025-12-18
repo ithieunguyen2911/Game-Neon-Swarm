@@ -1,12 +1,13 @@
 
-import { Player, Bullet, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion } from './Entities';
-import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType } from '../types';
+import { Player, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion, Projectile, EggBlasterBullet, PhotonLaser, FeatherShotgunBullet, HelixDNAProjectile, RoosterRocket } from './Entities';
+import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType, EnemyState, PlayerState } from '../types';
 import { 
   CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, ENEMY_SPAWN_RATE_INITIAL,
-  ENEMY_BASE_SPEED, ENEMY_SIZE, MAP_PROGRESSION, WEAPON_CONFIGS
+  ENEMY_BASE_SPEED, ENEMY_SIZE, MAP_PROGRESSION, WEAPON_CONFIGS, PLAYER_SIZE
 } from '../constants';
 import { audio } from '../services/AudioSynthesizer';
 import { WeaponSystem } from './WeaponSystem';
+import { SpawnController, WaveData } from './SpawnController';
 
 export class GameEngine {
   gameState: GameState = GameState.MENU;
@@ -16,10 +17,12 @@ export class GameEngine {
   score: number = 0;
   highScore: number = 0;
   
+  worldScale: number = 1.0;
+  targetScale: number = 1.0;
+
   players: Map<string, Player> = new Map();
   localPlayerIds: string[] = [];
-
-  bullets: Bullet[] = [];
+  bullets: Projectile[] = [];
   enemies: Enemy[] = [];
   boss: Boss | null = null;
   particles: Particle[] = [];
@@ -28,9 +31,15 @@ export class GameEngine {
   backgroundEntities: BackgroundEntity[] = [];
 
   fireTimer: Map<string, number> = new Map();
-  enemySpawnTimer: number = 0;
   phaseTimer: number = 0;
   screenShake: number = 0;
+  comboCount: number = 0;
+  comboTimer: number = 0;
+
+  private spawnController: SpawnController | null = null;
+  private waveDelayTimer: number = 0;
+  private nextWaveData: WaveData | null = null;
+  private isHinting: boolean = false;
 
   p1Colors = { primary: COLORS.p1Primary, glow: COLORS.p1Glow };
   p2Colors = { primary: COLORS.p2Primary, glow: COLORS.p2Glow };
@@ -42,35 +51,52 @@ export class GameEngine {
   }
 
   togglePause() {
-    if (this.gameState === GameState.PLAYING) {
-      this.gameState = GameState.PAUSED;
-    } else if (this.gameState === GameState.PAUSED) {
-      this.gameState = GameState.PLAYING;
-    }
+    if (this.gameState === GameState.PLAYING) this.gameState = GameState.PAUSED;
+    else if (this.gameState === GameState.PAUSED) this.gameState = GameState.PLAYING;
   }
 
   startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0, p1Config?: any, p2Config?: any) {
     if (p1Config) this.p1Colors = p1Config;
     if (p2Config) this.p2Colors = p2Config;
-    
     this.gameState = GameState.PLAYING;
     this.currentMapIndex = mapIndex;
     this.currentPhase = MapPhase.NORMAL;
     this.phaseTimer = 0;
     this.score = 0;
+    this.comboCount = 0;
+    this.comboTimer = 0;
+    this.updateTargetScale();
+    this.worldScale = this.targetScale; 
     this.setupPlayers(mode);
     this.setupMap();
     audio.init();
   }
 
+  private updateTargetScale() {
+    this.targetScale = 1.0 / (1.0 + this.currentMapIndex * 0.12);
+  }
+
+  dispose() {
+    this.gameState = GameState.MENU;
+    this.bullets = []; this.enemies = []; this.particles = [];
+    this.powerups = []; this.explosions = []; this.backgroundEntities = [];
+    this.players.clear(); this.fireTimer.clear();
+    this.boss = null; this.score = 0; this.screenShake = 0;
+    this.spawnController = null; this.nextWaveData = null; this.isHinting = false;
+  }
+
   private setupMap() {
-    this.bullets = [];
-    this.enemies = [];
-    this.boss = null;
-    this.powerups = [];
-    this.particles = [];
-    this.explosions = [];
+    this.updateTargetScale();
     this.initEnvironment();
+    const map = MAP_PROGRESSION[this.currentMapIndex];
+    this.spawnController = new SpawnController(map.zone, this.currentMapIndex);
+    this.waveDelayTimer = 1.5;
+    this.nextWaveData = null;
+    this.isHinting = false;
+    this.players.forEach(p => {
+        p.radius = PLAYER_SIZE * this.targetScale;
+        p.invulnerableTime = 2.0; // Bất tử khi bắt đầu map mới
+    });
   }
 
   private setupPlayers(mode: GameMode) {
@@ -80,18 +106,28 @@ export class GameEngine {
     this.localPlayerIds.forEach((id, idx) => {
       const x = mode === GameMode.OFFLINE_COOP ? (idx === 0 ? CANVAS_WIDTH/3 : 2*CANVAS_WIDTH/3) : CANVAS_WIDTH/2;
       const config = id === 'p1' ? this.p1Colors : this.p2Colors;
-      this.players.set(id, new Player(x, CANVAS_HEIGHT - 100, id, config.primary, config.glow));
+      const p = new Player(x, CANVAS_HEIGHT - 100, id, config.primary, config.glow);
+      p.radius = PLAYER_SIZE * this.worldScale;
+      this.players.set(id, p);
       this.fireTimer.set(id, 0);
     });
   }
 
   initEnvironment() {
     this.backgroundEntities = [];
-    for(let i=0; i<50; i++) {
+    const map = MAP_PROGRESSION[this.currentMapIndex];
+    const density = 60 + this.currentMapIndex * 20; 
+    for(let i=0; i<density; i++) {
+        let color = '#ffffff22';
+        if (map.zone === ZoneType.VOLCANO) color = '#f9731644';
+        if (map.zone === ZoneType.CYBER) color = '#22d3ee33';
+        if (map.zone === ZoneType.ICE) color = '#ffffff55';
+        
         this.backgroundEntities.push(new BackgroundEntity(
             {x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT},
-            {x: 0, y: 120 + Math.random() * 250}, 
-            1 + Math.random() * 3, '#ffffff22'
+            {x: 0, y: (80 + Math.random() * 250)}, 
+            (1 + Math.random() * 3) / this.worldScale, 
+            color
         ));
     }
   }
@@ -99,37 +135,61 @@ export class GameEngine {
   update(dt: number, input: InputState) {
     if (this.gameState !== GameState.PLAYING) return;
 
+    if (Math.abs(this.worldScale - this.targetScale) > 0.001) {
+        this.worldScale += (this.targetScale - this.worldScale) * dt * 2;
+    }
+
     this.phaseTimer += dt;
     this.updatePhases();
+
+    if (this.comboTimer > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) this.comboCount = 0;
+    }
 
     this.localPlayerIds.forEach(id => {
         const p = this.players.get(id);
         const pInput = id === 'p2' ? input.p2 : input.p1;
-        if (p && !p.isDead) {
+        if (p && p.state !== PlayerState.DEAD) {
+            p.radius = PLAYER_SIZE * this.worldScale; 
             p.handleInput(dt, pInput, MAP_PROGRESSION[this.currentMapIndex].zone);
             p.update(dt);
-            this.handleShooting(p, dt, pInput);
+            if (p.state === PlayerState.ALIVE) this.handleShooting(p, dt, pInput);
         }
     });
 
-    if (this.currentPhase !== MapPhase.BOSS) {
-        this.enemySpawnTimer -= dt;
-        if (this.enemySpawnTimer <= 0) {
-            this.spawnEnemy();
-            const phaseBonus = this.currentPhase === MapPhase.ELITE ? 0.6 : 1.0;
-            this.enemySpawnTimer = (ENEMY_SPAWN_RATE_INITIAL * phaseBonus) / (1 + this.currentMapIndex * 0.25);
+    if (this.currentPhase !== MapPhase.BOSS && this.spawnController) {
+      if (this.enemies.length === 0) {
+        if (!this.nextWaveData) {
+            this.nextWaveData = this.spawnController.prepareNextWave(this.worldScale);
+            this.waveDelayTimer = 1.8;
+            this.isHinting = true;
+        } else {
+            this.waveDelayTimer -= dt;
+            if (this.waveDelayTimer <= 0) {
+                this.enemies = this.spawnController.spawnEnemiesFromSlots(this.nextWaveData.slots, this.worldScale);
+                this.nextWaveData = null;
+                this.isHinting = false;
+            }
         }
+      }
     } else if (this.boss) {
         this.updateBossLogic(dt);
     }
 
-    this.bullets.forEach(b => b.update(dt));
+    this.bullets.forEach(b => {
+        if (b instanceof RoosterRocket) (b as RoosterRocket).updateWithEngine(dt, this);
+        else b.update(dt);
+    });
+
     this.explosions.forEach(exp => exp.update(dt));
     this.enemies.forEach(e => {
         e.update(dt);
-        if (e.shootTimer <= 0) {
-            this.bullets.push(new Bullet({x: e.position.x, y: e.position.y + 20}, {x: 0, y: 550}, WeaponType.BLASTER, '#ffffff', 1, 'enemy', true));
-            e.shootTimer = 1.8 + Math.random() * 4;
+        if (e.state !== EnemyState.ENTRY && e.shootTimer <= 0) {
+            const bullet = new EggBlasterBullet({x: e.position.x, y: e.position.y + 20}, {x: 0, y: 550}, 1, 'enemy', true);
+            bullet.radius *= this.worldScale;
+            this.bullets.push(bullet);
+            e.shootTimer = 4 + Math.random() * 8;
         }
     });
     this.boss?.update(dt);
@@ -140,11 +200,11 @@ export class GameEngine {
         if (b.position.y > CANVAS_HEIGHT) b.position.y = -20;
     });
 
-    this.checkCollisions();
+    this.checkCollisions(dt);
     this.cullEntities();
 
     if (this.screenShake > 0) this.screenShake = Math.max(0, this.screenShake - dt * 40);
-    if (this.localPlayerIds.every(id => this.players.get(id)?.isDead)) {
+    if (this.localPlayerIds.every(id => this.players.get(id)?.state === PlayerState.DEAD)) {
         this.gameState = GameState.GAME_OVER;
         if (this.score > this.highScore) {
             this.highScore = this.score;
@@ -154,9 +214,8 @@ export class GameEngine {
   }
 
   private updatePhases() {
-      if (this.currentPhase === MapPhase.NORMAL && this.phaseTimer > 90) {
-          this.currentPhase = MapPhase.ELITE;
-      } else if (this.currentPhase === MapPhase.ELITE && this.phaseTimer > 180) {
+      if (this.currentPhase === MapPhase.NORMAL && this.phaseTimer > 120) this.currentPhase = MapPhase.ELITE;
+      else if (this.currentPhase === MapPhase.ELITE && this.phaseTimer > 240) {
           this.currentPhase = MapPhase.BOSS;
           this.spawnBoss();
       }
@@ -164,29 +223,29 @@ export class GameEngine {
 
   private spawnBoss() {
       const map = MAP_PROGRESSION[this.currentMapIndex];
-      this.boss = new Boss({ x: CANVAS_WIDTH / 2, y: -400 }, 600 * map.difficultyScale, map.bossName, map.zone);
+      this.boss = new Boss({ x: CANVAS_WIDTH / 2, y: -400 }, 800 * Math.pow(1.6, this.currentMapIndex), map.bossName, map.zone);
+      this.boss.radius *= this.worldScale * 1.5; 
       audio.playPowerup();
   }
 
   private updateBossLogic(dt: number) {
       if (!this.boss) return;
-      const map = MAP_PROGRESSION[this.currentMapIndex];
-      
       switch(this.currentMapIndex) {
           case 0: this.boss.isVulnerable = this.boss.shootTimer > 3.2; break;
           case 1: this.boss.isVulnerable = Math.abs(this.boss.position.x - CANVAS_WIDTH/2) > (CANVAS_WIDTH * 0.32); break;
           default: this.boss.isVulnerable = Math.floor(this.phaseTimer) % 5 === 0; break;
       }
-
       if (this.boss.shootTimer <= 0) {
           const burst = 12 + this.currentMapIndex * 2;
           for(let i = 0; i < burst; i++) {
               const angle = (Math.PI / (burst-1)) * i;
-              this.bullets.push(new Bullet(
+              const bullet = new EggBlasterBullet(
                   {x: this.boss.position.x, y: this.boss.position.y + 80},
                   {x: Math.cos(angle - Math.PI) * 550, y: Math.sin(angle) * 550 + 200},
-                  WeaponType.BLASTER, '#ffffff', 1, 'enemy', true
-              ));
+                  1, 'enemy', true
+              );
+              bullet.radius *= this.worldScale;
+              this.bullets.push(bullet);
           }
           this.boss.shootTimer = 6.0; 
           audio.playShoot();
@@ -197,150 +256,115 @@ export class GameEngine {
     let timer = this.fireTimer.get(p.id) || 0;
     timer -= dt;
     if (input.shooting && timer <= 0) {
-      const newBullets = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
-      
-      if (p.weaponType === WeaponType.LASER) {
-          newBullets.forEach(b => {
-             b.target = this.findNearestEnemy(b.position);
-          });
-      }
-
-      this.bullets.push(...newBullets);
+      const newProjectiles = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
+      newProjectiles.forEach(proj => {
+          proj.radius *= this.worldScale; 
+          if (proj instanceof EggBlasterBullet && this.comboCount >= 3) proj.isPoweredUp = true;
+      });
+      this.bullets.push(...newProjectiles);
       audio.playShoot();
-      const interval = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
-      timer = interval;
+      timer = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
     }
     this.fireTimer.set(p.id, timer);
   }
 
-  private findNearestEnemy(pos: Vector2): Enemy | null {
-      let nearest: Enemy | null = null;
-      let minDist = 800; 
-      
-      if (this.boss && !this.boss.isDead) return this.boss;
-
-      this.enemies.forEach(e => {
-          if (e.isDead || e.position.y < 0) return;
-          const dx = e.position.x - pos.x;
-          const dy = e.position.y - pos.y;
-          const d = Math.sqrt(dx*dx + dy*dy);
-          if (d < minDist) {
-              minDist = d;
-              nearest = e;
-          }
-      });
-      return nearest;
-  }
-
-  private spawnEnemy() {
-    const x = Math.random() * (CANVAS_WIDTH - 200) + 100;
-    const isElitePhase = this.currentPhase === MapPhase.ELITE;
-    
-    let type = EnemyType.NORMAL;
-    if (isElitePhase) {
-        type = EnemyType.ELITE;
-    } else if (this.currentMapIndex >= 1 && Math.random() < 0.3) {
-        type = EnemyType.ARMORED;
-    }
-
-    let hpMultiplier = 1;
-    if (type === EnemyType.ARMORED) hpMultiplier = 3;
-    if (type === EnemyType.ELITE) hpMultiplier = 5;
-
-    const baseHp = (isElitePhase ? 4 : 1) + Math.floor(this.currentMapIndex * 0.8);
-    const hp = baseHp * hpMultiplier;
-
-    this.enemies.push(new Enemy(
-        { x, y: -80 }, 
-        { x: (Math.random() - 0.5) * 100, y: ENEMY_BASE_SPEED + (this.currentMapIndex * 25) }, 
-        hp, ENEMY_SIZE, MAP_PROGRESSION[this.currentMapIndex].zone, type
-    ));
-  }
-
-  private checkCollisions() {
+  private checkCollisions(dt: number) {
     this.bullets.forEach(b => {
       if (!b.isEnemy) {
         this.enemies.forEach(e => {
-          if (!e.isDead && this.isColliding(b, e)) {
-            if (b.type === WeaponType.HELIX) {
-               b.pierceCount--;
-               if (b.pierceCount <= 0) b.isDead = true;
-               this.spawnVortexParticles(b.position, b.color, 5);
-            } else if (b.type === WeaponType.ROCKET) {
-               b.isDead = true;
-               this.createExplosion(b.position, b.damage * 0.8, 150); 
-            } else {
-               b.isDead = true;
-            }
-            
-            e.hp -= b.damage; 
-            e.hit();
+          if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(b, e)) {
+            b.onImpact(this, e.position); 
+            let finalDamage = b.damage;
+            if (e.type === EnemyType.ARMORED) finalDamage *= 0.8;
+            e.hp -= finalDamage; e.hit();
             if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
           }
         });
         if (this.boss && this.isColliding(b, this.boss)) {
-            if (b.type === WeaponType.HELIX) {
-               b.pierceCount--;
-               if (b.pierceCount <= 0) b.isDead = true;
-               this.spawnVortexParticles(b.position, b.color, 5);
-            } else if (b.type === WeaponType.ROCKET) {
-               b.isDead = true;
-               this.createExplosion(b.position, b.damage * 0.8, 200);
-            } else {
-               b.isDead = true;
-            }
-
+            b.onImpact(this, b.position);
             if (this.boss.isVulnerable) {
                 this.boss.hp -= b.damage; this.boss.hit();
                 if (this.boss.hp <= 0) this.winMap();
             } else {
-                this.spawnParticles(b.position, '#22d3ee', 5);
-                audio.playHit();
+                this.spawnParticles(b.position, '#22d3ee', 5); audio.playHit();
             }
         }
       } else {
         this.players.forEach(p => {
-          if (!p.isDead && p.invulnerableTime <= 0 && this.isColliding(b, p)) {
-            b.isDead = true; this.playerHit(p);
+          if (p.state === PlayerState.ALIVE && p.invulnerableTime <= 0 && this.isColliding(b, p)) {
+            b.onImpact(this, p.position); this.playerHit(p);
           }
         });
       }
     });
 
-    this.explosions.forEach(exp => {
-        this.enemies.forEach(e => {
-            if (!e.isDead && !exp.damagedEnemies.has(e) && this.isColliding(exp, e)) {
-                e.hp -= exp.damage;
-                e.hit();
-                exp.damagedEnemies.add(e);
-                if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
-            }
-        });
-        if (this.boss && !exp.damagedEnemies.has(this.boss) && this.isColliding(exp, this.boss)) {
-            if (this.boss.isVulnerable) {
-                this.boss.hp -= exp.damage;
-                this.boss.hit();
-                exp.damagedEnemies.add(this.boss);
-                if (this.boss.hp <= 0) this.winMap();
+    this.players.forEach(p => {
+        if (p.state === PlayerState.ALIVE && p.invulnerableTime <= 0) {
+            this.enemies.forEach(e => {
+                if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(p, e)) {
+                    this.playerHit(p);
+                    e.hp = 0; e.isDead = true; this.killEnemy(e);
+                }
+            });
+            if (this.boss && !this.boss.isDead && this.isColliding(p, this.boss)) {
+                this.playerHit(p);
+                p.position.y += 100;
+                p.velocity.y = 800;
             }
         }
     });
 
+    this.explosions.forEach(exp => {
+        this.enemies.forEach(e => {
+            if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(exp, e)) {
+                if (exp.isBurning) { e.hp -= exp.damage * dt; if (Math.random() < 0.1) e.hit(); }
+                else if (!exp.damagedEnemies.has(e)) { e.hp -= exp.damage; e.hit(); exp.damagedEnemies.add(e); }
+                if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
+            }
+        });
+    });
+
     this.powerups.forEach(pu => {
       this.players.forEach(p => {
-        if (!p.isDead && !pu.isDead && this.isColliding(p, pu)) {
-          pu.isDead = true; 
-          this.collectPowerup(p, pu);
+        if (p.state === PlayerState.ALIVE && !pu.isDead && this.isColliding(p, pu)) {
+          pu.isDead = true; this.collectPowerup(p, pu);
         }
       });
     });
   }
 
-  private createExplosion(pos: Vector2, damage: number, radius: number) {
-      this.explosions.push(new Explosion({...pos}, radius, damage));
-      this.screenShake = Math.max(this.screenShake, 25);
+  public createExplosion(pos: Vector2, damage: number, radius: number) {
+      this.explosions.push(new Explosion({...pos}, radius * this.worldScale, damage));
+      this.screenShake = Math.max(this.screenShake, 30);
       audio.playExplosion();
-      this.spawnParticles(pos, '#f97316', 15);
+      this.spawnParticles(pos, '#f97316', 20, 2.0);
+  }
+
+  public createRocketExplosion(pos: Vector2, damage: number) {
+      const impact = new Explosion({...pos}, 220 * this.worldScale, damage, '#ffffff');
+      impact.maxLife = 0.4; impact.life = 0.4;
+      this.explosions.push(impact);
+      const burn = new Explosion({...pos}, 200 * this.worldScale, damage * 0.25, '#f97316');
+      burn.isBurning = true; burn.maxLife = 1.5; burn.life = 1.5;
+      this.explosions.push(burn);
+      audio.playExplosion();
+      this.spawnParticles(pos, '#64748b', 30, 0.8);
+  }
+
+  public spawnPiercingRing(pos: Vector2, color: string) {
+      const ring = new Explosion({...pos}, 100 * this.worldScale, 0, color);
+      ring.maxLife = 0.2; ring.life = 0.2;
+      this.explosions.push(ring);
+  }
+
+  public triggerChainResonance(pos: Vector2, damage: number, color: string) {
+      const radius = 220 * this.worldScale; let target: Enemy | null = null; let minDist = radius;
+      this.enemies.forEach(e => {
+          if (e.isDead) return;
+          const d = Math.hypot(e.position.x - pos.x, e.position.y - pos.y);
+          if (d < minDist) { minDist = d; target = e; }
+      });
+      if (target) { target.hp -= damage; target.hit(); this.spawnParticles(target.position, color, 3, 5.0); audio.playHit(); }
   }
 
   private winMap() {
@@ -364,37 +388,55 @@ export class GameEngine {
   }
 
   private killEnemy(e: Enemy) {
-    this.score += e.scoreValue; 
-    this.screenShake = Math.max(this.screenShake, 12); 
+    this.score += e.scoreValue; this.comboCount++; this.comboTimer = 1.2;
+    this.screenShake = Math.max(this.screenShake, 15); 
     audio.playExplosion();
-    this.spawnParticles(e.position, e.color, 20);
-    if (Math.random() < 0.2) {
-        const isHeart = Math.random() < 0.3;
-        this.powerups.push(new PowerUp({...e.position}, isHeart ? PowerUpType.HEART : PowerUpType.WEAPON));
+    this.spawnParticles(e.position, e.color, 25, 2.5);
+    if (Math.random() < 0.22) {
+        const isHeart = Math.random() < 0.35;
+        const pu = new PowerUp({...e.position}, isHeart ? PowerUpType.HEART : PowerUpType.WEAPON);
+        pu.radius *= this.worldScale;
+        this.powerups.push(pu);
     }
   }
 
   private playerHit(p: Player) {
-      p.lives--; this.screenShake = 45; audio.playExplosion();
-      this.spawnParticles(p.position, p.glowColor, 45);
-      if (p.lives > 0) p.invulnerableTime = 3.5; else p.isDead = true;
+      p.lives--; this.screenShake = 60; audio.playExplosion();
+      this.spawnParticles(p.position, p.glowColor, 60, 2.0);
+      this.spawnParticles(p.position, '#ffffff', 20, 3.0);
+      
+      if (p.lives > 0) {
+          this.respawnPlayer(p);
+      } else {
+          p.state = PlayerState.DEAD;
+      }
+  }
+
+  private respawnPlayer(p: Player) {
+      p.state = PlayerState.RESPAWNING;
+      p.respawnTimer = 1.5; // 1.5s để bay lên
+      p.position.x = CANVAS_WIDTH / 2;
+      p.position.y = CANVAS_HEIGHT + 150;
+      p.velocity.x = 0;
+      p.velocity.y = 0;
+      p.invulnerableTime = 3.0; // Bất tử tổng cộng 3s
   }
 
   private collectPowerup(p: Player, pu: PowerUp) {
     audio.playPowerup();
-    if (pu.kind === PowerUpType.HEART) {
-        p.lives++; 
-    } else {
+    if (pu.kind === PowerUpType.HEART) { p.lives++; } 
+    else {
         if (p.weaponType === pu.weaponType) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
         else p.weaponType = pu.weaponType;
     }
   }
 
-  spawnParticles(pos: Vector2, color: string, count: number) {
+  spawnParticles(pos: Vector2, color: string, count: number, decay: number = 2.5) {
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 400;
-      this.particles.push(new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 5.0, 2.5));
+      const particle = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 5.0 * this.worldScale, decay);
+      this.particles.push(particle);
     }
   }
 
@@ -402,16 +444,15 @@ export class GameEngine {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 100 + Math.random() * 200;
-        const p = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 3.0, 3.5);
-        p.velocity.x += Math.sin(angle) * 100;
-        p.velocity.y += Math.cos(angle) * 100;
+        const p = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 3.5 * this.worldScale, 3.5);
+        p.velocity.x += Math.sin(angle) * 120; p.velocity.y += Math.cos(angle) * 120;
         this.particles.push(p);
     }
   }
 
   cullEntities() {
-    this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -100 && b.position.y < CANVAS_HEIGHT + 100);
-    this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 250);
+    this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -250 && b.position.y < CANVAS_HEIGHT + 250);
+    this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 350);
     this.explosions = this.explosions.filter(exp => !exp.isDead);
     this.particles = this.particles.filter(p => !p.isDead);
     this.powerups = this.powerups.filter(p => !p.isDead);
@@ -421,11 +462,11 @@ export class GameEngine {
 
   draw(ctx: CanvasRenderingContext2D) {
     const map = MAP_PROGRESSION[this.currentMapIndex];
-    ctx.fillStyle = map.bgColor;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
+    ctx.fillStyle = map.bgColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    this.drawZoneAtmosphere(ctx, map.zone, true);
     ctx.save();
     if (this.screenShake > 0) ctx.translate((Math.random()-0.5)*this.screenShake, (Math.random()-0.5)*this.screenShake);
+    if (this.isHinting && this.nextWaveData) this.drawFormationHint(ctx, this.nextWaveData.slots);
     this.backgroundEntities.forEach(b => b.draw(ctx));
     this.powerups.forEach(p => p.draw(ctx));
     this.enemies.forEach(e => e.draw(ctx));
@@ -434,5 +475,47 @@ export class GameEngine {
     this.explosions.forEach(exp => exp.draw(ctx));
     this.players.forEach(p => p.draw(ctx));
     ctx.restore();
+    this.drawZoneAtmosphere(ctx, map.zone, false);
+  }
+
+  private drawZoneAtmosphere(ctx: CanvasRenderingContext2D, zone: ZoneType, isBottom: boolean) {
+      if (isBottom) {
+          if (zone === ZoneType.CYBER) {
+              ctx.strokeStyle = 'rgba(34, 211, 238, 0.1)';
+              ctx.lineWidth = 1;
+              const spacing = 100 * this.worldScale;
+              for (let x = 0; x < CANVAS_WIDTH; x += spacing) {
+                  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
+              }
+              for (let y = 0; y < CANVAS_HEIGHT; y += spacing) {
+                  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
+              }
+          }
+      } else {
+          if (zone === ZoneType.VOLCANO) {
+              ctx.fillStyle = 'rgba(239, 68, 68, 0.08)'; 
+              ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+              if (Math.random() < 0.05) this.spawnParticles({x: Math.random() * CANVAS_WIDTH, y: CANVAS_HEIGHT}, '#f97316', 1, 0.5);
+          } else if (zone === ZoneType.ICE) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
+              ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+              if (Math.random() < 0.1) this.spawnParticles({x: Math.random() * CANVAS_WIDTH, y: 0}, '#ffffff', 1, 1.5);
+          }
+      }
+  }
+
+  private drawFormationHint(ctx: CanvasRenderingContext2D, slots: Vector2[]) {
+      ctx.save();
+      const pulse = 0.2 + Math.abs(Math.sin(Date.now() / 200)) * 0.3;
+      ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
+      ctx.strokeStyle = `rgba(34, 211, 238, ${pulse})`;
+      ctx.lineWidth = 2;
+      slots.forEach(slot => {
+          ctx.beginPath();
+          ctx.arc(slot.x, slot.y, 15 * this.worldScale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+      });
+      ctx.restore();
   }
 }
