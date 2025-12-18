@@ -56,9 +56,9 @@ const HELIX_TABLE: Record<number, WeaponStats> = {
 };
 
 const ROCKET_TABLE: Record<number, WeaponStats> = {
-  1: { bullets: 1, damage: 45, hz: 1.2 }, 2: { bullets: 1, damage: 55, hz: 1.3 },
-  3: { bullets: 2, damage: 65, hz: 1.4 }, 4: { bullets: 2, damage: 75, hz: 1.5 },
-  5: { bullets: 2, damage: 85, hz: 1.6 }, 6: { bullets: 3, damage: 95, hz: 1.7 },
+  1: { bullets: 1, damage: 45, hz: 1.2 }, 2: { bullets: 2, damage: 55, hz: 1.3 },
+  3: { bullets: 3, damage: 65, hz: 1.4 }, 4: { bullets: 3, damage: 75, hz: 1.5 },
+  5: { bullets: 3, damage: 85, hz: 1.6 }, 6: { bullets: 3, damage: 95, hz: 1.7 },
   7: { bullets: 3, damage: 110, hz: 1.8 }, 8: { bullets: 3, damage: 125, hz: 1.9 },
   9: { bullets: 4, damage: 140, hz: 2.0 }, 10: { bullets: 4, damage: 160, hz: 2.1 },
   11: { bullets: 4, damage: 180, hz: 2.2 }, 12: { bullets: 5, damage: 200, hz: 2.3 },
