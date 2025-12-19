@@ -11,7 +11,7 @@ export class HelixDNAProjectile extends Projectile {
     
     // Thuộc tính mới cho hiệu ứng
     private trail: Vector2[] = [];
-    private maxTrail = 12;
+    private maxTrail = 9;
     private zigzagOffset: number = 0;
     private amplitude: number = 70;
     private frequency: number = 12;

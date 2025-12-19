@@ -1,20 +1,21 @@
+
 import { Projectile } from './Projectile';
 import { Vector2, WeaponType } from '../../../types';
 import { GameEngine } from '../../GameEngine';
+import { drawOutline } from '../BaseEntity';
 
 export class FeatherShotgunBullet extends Projectile {
     private trailPositions: Vector2[] = [];
-    private maxTrails = 3;
+    private maxTrails = 12; // Tăng từ 1 lên 12 để thấy rõ hiệu ứng đuôi
 
     constructor(pos: Vector2, vel: Vector2, damage: number, color: string, ownerId: string) {
-        // Randomize neon colors slightly for variety
         const neonColors = ['#ff00ff', '#bf00ff', '#00ffff'];
-        const randomColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+        const randomColor = color || neonColors[Math.floor(Math.random() * neonColors.length)];
         super(pos, vel, 8, randomColor, damage, ownerId, WeaponType.SHOTGUN);
     }
 
     update(dt: number) {
-        // Save trail for visual juice
+        // Lưu vị trí cũ để tạo hiệu ứng đuôi (Juice)
         this.trailPositions.unshift({ ...this.position });
         if (this.trailPositions.length > this.maxTrails) this.trailPositions.pop();
         
@@ -22,38 +23,48 @@ export class FeatherShotgunBullet extends Projectile {
     }
 
     draw(ctx: CanvasRenderingContext2D) {
+        const w = this.radius * 0.8;
+        const h = this.radius * 2.2;
+        const angle = Math.atan2(this.velocity.y, this.velocity.x) + Math.PI / 2;
+
+        // Vẽ đuôi (Trail)
+        ctx.save();
+        this.trailPositions.forEach((pos, i) => {
+            const alpha = (1 - i / this.maxTrails) * 0.25;
+            if (alpha <= 0) return;
+            
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.rotate(angle);
+            const scale = 1 - (i / this.maxTrails);
+            ctx.scale(scale, scale);
+            // Hình thoi cho đuôi
+            ctx.moveTo(0, -h); ctx.lineTo(w, 0); ctx.lineTo(0, h); ctx.lineTo(-w, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        });
+        ctx.restore();
+
+        // Vẽ đạn chính
         ctx.save();
         ctx.translate(this.position.x, this.position.y);
-        ctx.rotate(Math.atan2(this.velocity.y, this.velocity.x) + Math.PI / 2);
+        ctx.rotate(angle);
 
-        // Draw elongated rhombus (feather shape)
-        const w = this.radius * 0.6;
-        const h = this.radius * 2.2;
-
-        // Draw trail in Canvas (Simple version)
-        this.trailPositions.forEach((pos, i) => {
-            const alpha = (1 - i / this.maxTrails) * 0.3;
-            ctx.fillStyle = this.color;
-            ctx.globalAlpha = alpha;
-            // Draw a ghost feather
-        });
-
-        ctx.globalAlpha = 1.0;
         ctx.shadowBlur = 15;
         ctx.shadowColor = this.color;
         
-        ctx.fillStyle = '#ffffff'; // White core
+        ctx.fillStyle = '#ffffff'; 
         ctx.beginPath();
-        ctx.moveTo(0, -h); 
-        ctx.lineTo(w, 0); 
-        ctx.lineTo(0, h); 
-        ctx.lineTo(-w, 0);
+        ctx.moveTo(0, -h); ctx.lineTo(w, 0); ctx.lineTo(0, h); ctx.lineTo(-w, 0);
         ctx.closePath();
         ctx.fill();
 
-        // Neon outline
         ctx.strokeStyle = this.color;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
 
         ctx.restore();
@@ -61,12 +72,6 @@ export class FeatherShotgunBullet extends Projectile {
 
     onImpact(engine: GameEngine, impactPos: Vector2) {
         this.isDead = true;
-        // Spawn "Light Strands" instead of circles
-        for (let i = 0; i < 6; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 100 + Math.random() * 200;
-            // We use standard particles but they will be rendered as strands in specialized engine methods if needed
-            engine.spawnParticles(impactPos, this.color, 1, 4.0);
-        }
+        engine.spawnParticles(impactPos, this.color, 8, 4.0);
     }
 }

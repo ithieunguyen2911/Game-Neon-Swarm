@@ -15,7 +15,7 @@ export class RoosterRocket extends Projectile {
     private maxLife: number = 1.5; 
     
     private trail: Vector2[] = [];
-    private maxTrailLength: number = 30; 
+    private maxTrailLength: number = 18; 
 
     constructor(pos: Vector2, vel: Vector2, damage: number, color: string, ownerId: string) {
         super(pos, vel, 16, color, damage, ownerId, WeaponType.ROCKET);

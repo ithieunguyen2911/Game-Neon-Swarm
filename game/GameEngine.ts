@@ -1,5 +1,10 @@
 
-import { Player, Enemy, Boss, Particle, PowerUp, BackgroundEntity, Explosion, Projectile, EggBlasterBullet, PhotonLaser, FeatherShotgunBullet, HelixDNAProjectile, RoosterRocket } from './Entities';
+import { 
+    Player, Enemy, Boss, BossChickenKing, BossMagmaRooster, 
+    Particle, PowerUp, BackgroundEntity, Explosion, Projectile, 
+    EggBlasterBullet, PhotonLaser, FeatherShotgunBullet, 
+    HelixDNAProjectile, RoosterRocket 
+} from './Entities';
 import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType, EnemyState, PlayerState } from '../types';
 import { 
   CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, MAP_PROGRESSION, PLAYER_SIZE
@@ -173,7 +178,7 @@ export class GameEngine {
         }
       }
     } else if (this.boss) {
-        this.updateBossLogic(dt);
+        this.boss.updateWithEngine(dt, this);
     }
 
     this.bullets.forEach(b => {
@@ -191,7 +196,7 @@ export class GameEngine {
             e.shootTimer = 4 + Math.random() * 8;
         }
     });
-    this.boss?.update(dt);
+    
     this.particles.forEach(p => p.update(dt));
     this.powerups.forEach(p => p.update(dt));
     this.backgroundEntities.forEach(b => {
@@ -223,53 +228,20 @@ export class GameEngine {
   private spawnBoss() {
       const map = MAP_PROGRESSION[this.currentMapIndex];
       const themeColors = ['#22d3ee', '#f97316', '#22c55e', '#ffffff', '#a855f7', '#10b981', '#fb7185', '#fbbf24', '#f87171', '#ffffff'];
-      const bossWeapons = [WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER, WeaponType.BLASTER, WeaponType.SHOTGUN, WeaponType.HELIX, WeaponType.ROCKET, WeaponType.LASER];
       const themeColor = themeColors[this.currentMapIndex % themeColors.length];
-      const weapon = bossWeapons[this.currentMapIndex % bossWeapons.length];
+      const pos = { x: CANVAS_WIDTH / 2, y: -400 };
+      const hp = 1000 * Math.pow(1.7, this.currentMapIndex);
 
-      this.boss = new Boss(
-        { x: CANVAS_WIDTH / 2, y: -400 }, 
-        1000 * Math.pow(1.7, this.currentMapIndex), 
-        map.bossName, 
-        map.zone,
-        themeColor
-      );
+      // FACTORY PATTERN: Chọn class Boss dựa trên map index
+      if (this.currentMapIndex === 1) { // Map 2: Magma Rooster
+          this.boss = new BossMagmaRooster(pos, hp, map.bossName, map.zone, themeColor);
+      } else {
+          // Mặc định hoặc Map 1
+          this.boss = new BossChickenKing(pos, hp, map.bossName, map.zone, themeColor);
+      }
       
-      this.boss.bossWeapon = weapon;
       this.boss.radius *= this.worldScale * 1.6; 
       audio.playPowerup();
-  }
-
-  private updateBossLogic(dt: number) {
-      if (!this.boss) return;
-      switch(this.currentMapIndex) {
-          case 0: this.boss.isVulnerable = this.boss.shootTimer > 3.0; break;
-          case 1: this.boss.isVulnerable = Math.abs(this.boss.position.x - CANVAS_WIDTH/2) > (CANVAS_WIDTH * 0.3); break;
-          case 2: this.boss.isVulnerable = Math.sin(this.phaseTimer * 2) > 0.5; break;
-          default: this.boss.isVulnerable = Math.floor(this.phaseTimer) % 4 === 0; break;
-      }
-
-      if (this.boss.shootTimer <= 0) {
-          this.fireBossWeapon();
-          this.boss.shootTimer = 4.5 + Math.random() * 1.5; 
-          audio.playShoot();
-      }
-  }
-
-  private fireBossWeapon() {
-    if (!this.boss) return;
-    const px = this.boss.position.x;
-    const py = this.boss.position.y + 120;
-    const bossLevel = 4 + this.currentMapIndex * 2;
-    const projectiles = WeaponSystem.fire(px, py, this.boss.bossWeapon, bossLevel, 'enemy', this.boss.themeColor);
-    
-    projectiles.forEach(proj => {
-        proj.isEnemy = true;
-        proj.velocity.y *= -1.3; 
-        proj.velocity.x *= 1.3;
-        proj.radius *= this.worldScale * 1.6; 
-        this.bullets.push(proj);
-    });
   }
 
   private handleShooting(p: Player, dt: number, input: any) {
@@ -285,14 +257,13 @@ export class GameEngine {
       this.bullets.push(...newProjectiles);
       audio.playShoot();
       
-      // Cập nhật mức nhiệt khi bắn
       const heatGain = WeaponSystem.getOverloadPerShot(p.weaponType, p.weaponLevel);
       p.overloadValue += heatGain;
       
       if (p.overloadValue >= 100) {
           p.overloadValue = 100;
           p.isOverheated = true;
-          audio.playExplosion(); // Âm thanh báo hiệu lỗi hệ thống
+          audio.playExplosion();
       }
 
       timer = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
@@ -483,9 +454,7 @@ export class GameEngine {
   }
 
   cullEntities() {
-    // Thu hẹp phạm vi xóa đạn từ 250px xuống 100px để CPU xử lý ít thực thể off-screen hơn
     this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -100 && b.position.y < CANVAS_HEIGHT + 100);
-    // Thu hẹp phạm vi xóa kẻ địch
     this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 150);
     this.explosions = this.explosions.filter(exp => !exp.isDead);
     this.particles = this.particles.filter(p => !p.isDead);

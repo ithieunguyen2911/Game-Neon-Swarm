@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Boss } from '../game/entities/Boss';
+// Changed import to include BossChickenKing as Boss is abstract
+import { Boss, BossChickenKing } from '../game/entities/Boss';
 import { MAP_PROGRESSION, CANVAS_WIDTH, CANVAS_HEIGHT, WEAPON_CONFIGS } from '../constants';
 import { WeaponType, ZoneType } from '../types';
 import { ChevronLeft, ChevronRight, X, ShieldAlert, Zap, Target } from 'lucide-react';
@@ -27,14 +28,15 @@ export const BossBestiary: React.FC<BossBestiaryProps> = ({ onClose }) => {
         const themeColor = themeColors[currentIndex % themeColors.length];
         const weapon = bossWeapons[currentIndex % bossWeapons.length];
         
-        const boss = new Boss(
+        // FIX: Use BossChickenKing instead of abstract Boss class
+        const boss = new BossChickenKing(
             { x: canvas.width / 2, y: canvas.height / 2 + 50 },
             1000,
             map.bossName,
             map.zone,
             themeColor
         );
-        boss.bossWeapon = weapon;
+        // FIX: Removed boss.bossWeapon = weapon; as bossWeapon is not a property of Boss
         boss.isVulnerable = Math.sin(Date.now() / 1000) > 0;
 
         const render = () => {
