@@ -1,41 +1,56 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from '../game/GameEngine';
-import { PixiRenderer } from '../game/PixiRenderer';
-import { MAP_PROGRESSION, DEFAULT_CONTROLS, COLOR_PALETTE } from '../constants';
-import { GameState, GameMode, WeaponType } from '../types';
-import { Target, Settings2, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { DEFAULT_CONTROLS, COLOR_PALETTE, COLORS } from '../constants';
+import { GameState, GameMode, WeaponType, PlayerState } from '../types';
+import { ScrollText } from 'lucide-react';
 import { InputHandler } from '../game/InputHandler';
 import { audio } from '../services/AudioSynthesizer';
+import { PixiRenderer } from '../game/PixiRenderer';
 
 // Import sub-components
 import { PlayerHUD, PlayerHUDState } from './PlayerHUD';
 import { GameMenu } from './GameMenu';
 import { PauseOverlay } from './PauseOverlay';
 import { GameOverOverlay } from './GameOverOverlay';
+import { LevelCompleteOverlay } from './LevelCompleteOverlay';
 import { BossBestiary } from './BossBestiary';
 
 const engine = new GameEngine();
 
 export const GameCanvas: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
+  const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const pixiContainerRef = useRef<HTMLDivElement>(null);
+  
   const inputHandlerRef = useRef<InputHandler | null>(null);
   const loopRef = useRef<number | null>(null);
   const isPlaying = useRef(false);
   
-  const [usePixi, setUsePixi] = useState(false);
-  const [isMuted, setIsMuted] = useState(audio.isMuted);
   const [gameState, setGameState] = useState<GameState>(engine.gameState);
   const [score, setScore] = useState(0);
   const [mapIdx, setMapIdx] = useState(0);
-  const [highScore, setHighScore] = useState(engine.highScore);
   
   const [p1ColorIdx, setP1ColorIdx] = useState(0);
   const [p2ColorIdx, setP2ColorIdx] = useState(1);
+  const [showBestiary, setShowBestiary] = useState(false);
 
-  const [p1HUD, setP1HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: true, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[0].primary, glowColor: COLOR_PALETTE[0].glow, overload: 0, isOverheated: false });
-  const [p2HUD, setP2HUD] = useState<PlayerHUDState>({ lives: 5, weaponLevel: 1, isDead: false, active: false, weaponType: WeaponType.BLASTER, primaryColor: COLOR_PALETTE[1].primary, glowColor: COLOR_PALETTE[1].glow, overload: 0, isOverheated: false });
+  const [p1HUD, setP1HUD] = useState<PlayerHUDState>({ 
+    lives: 5, weaponLevel: 1, isDead: false, active: true, 
+    weaponType: WeaponType.BLASTER, 
+    primaryColor: COLOR_PALETTE[0].primary, 
+    glowColor: COLOR_PALETTE[0].glow, 
+    overload: 0, isOverheated: false 
+  });
+
+  const [p2HUD, setP2HUD] = useState<PlayerHUDState>({ 
+    lives: 5, weaponLevel: 1, isDead: false, active: false, 
+    weaponType: WeaponType.BLASTER, 
+    primaryColor: COLOR_PALETTE[1].primary, 
+    glowColor: COLOR_PALETTE[1].glow, 
+    overload: 0, isOverheated: false 
+  });
 
   const stopGameLoop = useCallback(() => {
     if (loopRef.current !== null) {
@@ -45,171 +60,198 @@ export const GameCanvas: React.FC = () => {
     isPlaying.current = false;
   }, []);
 
-  const cleanupGame = useCallback(() => {
+  const clearResources = useCallback(() => {
     stopGameLoop();
     if (inputHandlerRef.current) {
         inputHandlerRef.current.destroy();
         inputHandlerRef.current = null;
     }
-    engine.dispose();
+    engine.cleanup();
     PixiRenderer.getInstance().reset();
+    audio.suspend();
+    
+    if (pixiContainerRef.current) {
+        pixiContainerRef.current.innerHTML = '';
+    }
   }, [stopGameLoop]);
 
-  useEffect(() => {
-    if (gameState !== GameState.PLAYING && gameState !== GameState.PAUSED && gameState !== GameState.GAME_OVER) {
-        return;
+  const initPixi = async () => {
+    await engine.initRenderer();
+    const pixiApp = PixiRenderer.getInstance().app;
+    if (pixiContainerRef.current && pixiApp) {
+        pixiContainerRef.current.innerHTML = ''; 
+        const pixiCanvas = pixiApp.canvas;
+        pixiCanvas.style.position = 'absolute';
+        pixiCanvas.style.top = '0';
+        pixiCanvas.style.left = '0';
+        pixiCanvas.style.width = '100%';
+        pixiCanvas.style.height = '100%';
+        pixiCanvas.style.objectFit = 'contain';
+        pixiCanvas.style.pointerEvents = 'none';
+        pixiContainerRef.current.appendChild(pixiCanvas);
     }
-
-    const canvas = canvasRef.current;
-    const pixiContainer = pixiContainerRef.current;
-    if (!canvas || !pixiContainer) return;
-
-    const renderer = PixiRenderer.getInstance();
-    const ctx = canvas.getContext('2d');
-
-    const startGameLoop = async () => {
-        if (isPlaying.current) return;
-        isPlaying.current = true;
-
-        if (usePixi) {
-            await renderer.init();
-            if (renderer.app && renderer.app.canvas) {
-                const pixiCanvas = renderer.app.canvas as HTMLCanvasElement;
-                if (!pixiContainer.contains(pixiCanvas)) {
-                    pixiContainer.appendChild(pixiCanvas);
-                    pixiCanvas.style.width = '100%';
-                    pixiCanvas.style.height = '100%';
-                    pixiCanvas.style.objectFit = 'contain';
-                }
-            }
-        }
-
-        if (!inputHandlerRef.current) {
-            inputHandlerRef.current = new InputHandler(DEFAULT_CONTROLS, canvas);
-        }
-
-        const loop = () => {
-            if (!isPlaying.current) return;
-
-            engine.update(1/60, inputHandlerRef.current!.state);
-            
-            if (usePixi && renderer.app) {
-                renderer.sync(engine);
-                canvas.style.opacity = '0';
-                pixiContainer.style.opacity = '1';
-            } else if (ctx) {
-                engine.draw(ctx);
-                canvas.style.opacity = '1';
-                pixiContainer.style.opacity = '0';
-            }
-            
-            setGameState(engine.gameState);
-            setScore(engine.score);
-            setMapIdx(engine.currentMapIndex);
-            setHighScore(engine.highScore);
-
-            const p1 = engine.players.get('p1');
-            if (p1) setP1HUD({ lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.isDead, active: true, weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor, overload: p1.overloadValue, isOverheated: p1.isOverheated });
-
-            const p2 = engine.players.get('p2');
-            if (p2) setP2HUD({ lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.isDead, active: true, weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor, overload: p2.overloadValue, isOverheated: p2.isOverheated });
-            else setP2HUD(prev => ({ ...prev, active: false }));
-
-            loopRef.current = requestAnimationFrame(loop);
-        };
-        
-        loopRef.current = requestAnimationFrame(loop);
-    };
-
-    startGameLoop();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.code === 'Escape') {
-            engine.togglePause();
-            setGameState(engine.gameState);
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [gameState, usePixi]);
-
-  const handleStartSolo = () => {
-    engine.startGame(GameMode.OFFLINE_SOLO, 0, COLOR_PALETTE[p1ColorIdx]);
-    setGameState(engine.gameState);
   };
 
-  const handleStartCoop = () => {
-    engine.startGame(GameMode.OFFLINE_COOP, 0, COLOR_PALETTE[p1ColorIdx], COLOR_PALETTE[p2ColorIdx]);
-    setGameState(engine.gameState);
+  const handleStartSolo = async () => {
+    COLORS.p1Primary = COLOR_PALETTE[p1ColorIdx].primary;
+    COLORS.p1Glow = COLOR_PALETTE[p1ColorIdx].glow;
+    await initPixi();
+    engine.startGame(GameMode.OFFLINE_SOLO, 0);
+    setGameState(GameState.PLAYING);
+    containerRef.current?.focus();
+  };
+
+  const handleStartCoop = async () => {
+    COLORS.p1Primary = COLOR_PALETTE[p1ColorIdx].primary;
+    COLORS.p1Glow = COLOR_PALETTE[p1ColorIdx].glow;
+    COLORS.p2Primary = COLOR_PALETTE[p2ColorIdx].primary;
+    COLORS.p2Glow = COLOR_PALETTE[p2ColorIdx].glow;
+    await initPixi();
+    engine.startGame(GameMode.OFFLINE_COOP, 0);
+    setGameState(GameState.PLAYING);
+    containerRef.current?.focus();
+  };
+
+  const handleResume = () => {
+    engine.gameState = GameState.PLAYING;
+    setGameState(GameState.PLAYING);
+    containerRef.current?.focus();
   };
 
   const handleQuit = () => {
-    cleanupGame();
+    clearResources();
+    engine.reset();
     setGameState(GameState.MENU);
   };
 
   const handleRestart = () => {
-    cleanupGame();
-    setGameState(GameState.MENU);
+    const mode = engine.players.size > 1 ? GameMode.OFFLINE_COOP : GameMode.OFFLINE_SOLO;
+    engine.startGame(mode, 0);
+    setGameState(GameState.PLAYING);
+    containerRef.current?.focus();
   };
 
-  const handleToggleMute = () => {
-    const muted = audio.toggleMute();
-    setIsMuted(muted);
+  const handleNextLevel = () => {
+    engine.startNextLevel();
+    setGameState(GameState.PLAYING);
+    containerRef.current?.focus();
   };
 
-  const currentMap = MAP_PROGRESSION[mapIdx] || MAP_PROGRESSION[0];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+        if (e.code === 'Escape' || e.code === 'KeyP') {
+            if (engine.gameState === GameState.PLAYING) {
+                engine.gameState = GameState.PAUSED;
+                setGameState(GameState.PAUSED);
+            } else if (engine.gameState === GameState.PAUSED) {
+                engine.gameState = GameState.PLAYING;
+                setGameState(GameState.PLAYING);
+            }
+        }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    if (gameState !== GameState.PLAYING && gameState !== GameState.PAUSED && gameState !== GameState.LEVEL_COMPLETE) {
+        return;
+    }
+
+    const hudCanvas = hudCanvasRef.current;
+    const bgCanvas = bgCanvasRef.current;
+    if (!hudCanvas || !bgCanvas) return;
+    
+    const hudCtx = hudCanvas.getContext('2d');
+    const bgCtx = bgCanvas.getContext('2d');
+    if (!hudCtx || !bgCtx) return;
+
+    const startGameLoop = () => {
+        if (isPlaying.current) return;
+        isPlaying.current = true;
+
+        if (!inputHandlerRef.current) {
+            inputHandlerRef.current = new InputHandler(DEFAULT_CONTROLS, hudCanvas);
+        }
+
+        const loop = () => {
+            if (!isPlaying.current) return;
+            
+            if (engine.gameState === GameState.PLAYING) {
+                engine.update(1/60, inputHandlerRef.current!.state);
+            }
+            
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+            engine.drawSplit(bgCtx, hudCtx);
+            
+            if (engine.gameState !== gameState) {
+                setGameState(engine.gameState);
+            }
+            
+            setScore(engine.score);
+            setMapIdx(engine.currentMapIndex);
+
+            const p1 = engine.players.get('p1');
+            if (p1) {
+                setP1HUD({ 
+                    lives: p1.lives, weaponLevel: p1.weaponLevel, isDead: p1.state === PlayerState.DEAD, active: true, 
+                    weaponType: p1.weaponType, primaryColor: p1.primaryColor, glowColor: p1.glowColor, 
+                    overload: p1.overloadValue, isOverheated: p1.isOverheated 
+                });
+            }
+
+            const p2 = engine.players.get('p2');
+            if (p2) {
+                setP2HUD({ 
+                    lives: p2.lives, weaponLevel: p2.weaponLevel, isDead: p2.state === PlayerState.DEAD, active: true, 
+                    weaponType: p2.weaponType, primaryColor: p2.primaryColor, glowColor: p2.glowColor, 
+                    overload: p2.overloadValue, isOverheated: p2.isOverheated 
+                });
+            } else {
+                setP2HUD(prev => ({ ...prev, active: false }));
+            }
+
+            loopRef.current = requestAnimationFrame(loop);
+        };
+        loopRef.current = requestAnimationFrame(loop);
+    };
+
+    startGameLoop();
+    return () => stopGameLoop();
+  }, [gameState, stopGameLoop]);
 
   return (
-    <div className="relative w-full h-screen flex items-center justify-center bg-black overflow-hidden font-sans">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[60] flex gap-2">
-          <button 
-            onClick={() => setUsePixi(!usePixi)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full font-black text-xs transition-all ${usePixi ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)]' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}
-          >
-            {usePixi ? <Sparkles className="w-4 h-4" /> : <Settings2 className="w-4 h-4" />}
-            {usePixi ? 'PIXIJS (EXPERIMENTAL)' : 'CANVAS 2D (STABLE)'}
-          </button>
-          
-          <button 
-            onClick={handleToggleMute}
-            className={`flex items-center justify-center p-2 rounded-full transition-all ${isMuted ? 'bg-red-900/40 text-red-400' : 'bg-neutral-800 text-neutral-400 hover:bg-neutral-700'}`}
-          >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-      </div>
+    <div 
+      ref={containerRef} 
+      tabIndex={0}
+      className="relative w-full h-screen flex items-center justify-center bg-black overflow-hidden font-sans outline-none"
+    >
+      <canvas 
+        ref={bgCanvasRef} 
+        width={1920} height={1080} 
+        className="absolute inset-0 w-full h-full object-contain pointer-events-none z-0" 
+      />
+      <div 
+        ref={pixiContainerRef}
+        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+      />
+      <canvas 
+        ref={hudCanvasRef} 
+        width={1920} height={1080} 
+        className="absolute inset-0 w-full h-full object-contain pointer-events-auto z-20" 
+      />
 
-      <div ref={pixiContainerRef} className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500" />
-      
-      <canvas ref={canvasRef} width={1920} height={1080} className="max-w-full max-h-full object-contain transition-opacity duration-500" />
-
-      {(gameState === GameState.PLAYING || gameState === GameState.PAUSED) && (
+      {(gameState === GameState.PLAYING || gameState === GameState.LEVEL_COMPLETE) && (
         <>
-          <div className="absolute top-8 left-8 text-white font-black italic z-10 pointer-events-none">
-            <div className="text-cyan-400 text-sm tracking-widest mb-1">MISSION SECTOR {mapIdx + 1}/10</div>
-            <div className="text-6xl tracking-tighter drop-shadow-2xl">{currentMap.name}</div>
+          <div className="absolute top-40 left-60 max-w-sm z-30 pointer-events-none opacity-60">
+             <p className="text-cyan-400 text-xs italic font-medium uppercase tracking-widest mb-1 flex items-center gap-2">
+                <ScrollText className="w-3 h-3" /> Encrypted Comms
+             </p>
+             <p className="text-white/50 text-sm leading-tight">
+                {engine.currentVersion.maps[mapIdx]?.storySnippet}
+             </p>
           </div>
-
-          <div className="absolute top-8 right-8 text-white text-right font-black italic z-10 pointer-events-none">
-            <div className="text-neutral-500 text-sm tracking-widest mb-1 uppercase">WORLD RECORD: {highScore.toLocaleString()} pts</div>
-            <div className="text-7xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-neutral-400 leading-none drop-shadow-2xl">
-                {score.toLocaleString()}
-            </div>
-          </div>
-
-          {engine.boss && (
-            <div className="absolute top-44 left-1/2 -translate-x-1/2 w-[600px] text-center z-10 animate-in fade-in slide-in-from-top duration-700 pointer-events-none">
-                <div className="text-cyan-400 text-sm font-black uppercase tracking-[0.4em] flex items-center justify-center gap-3 mb-3">
-                    <Target className="w-6 h-6 animate-spin-slow" /> PILOT INTELLIGENCE
-                </div>
-                <div className="text-white text-2xl italic font-black bg-black/80 px-10 py-5 rounded-3xl border-2 border-cyan-500/40 backdrop-blur-2xl shadow-[0_0_50px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400/20">
-                    "{currentMap.bossLogic.toUpperCase()}"
-                </div>
-            </div>
-          )}
 
           <PlayerHUD state={p1HUD} isLeft={true} label="PLAYER 1" />
           {p2HUD.active && <PlayerHUD state={p2HUD} isLeft={false} label="PLAYER 2" />}
@@ -217,34 +259,34 @@ export const GameCanvas: React.FC = () => {
       )}
 
       {gameState === GameState.PAUSED && (
-        <PauseOverlay 
-            onResume={() => engine.togglePause()} 
-            onQuit={handleQuit} 
-        />
+        <PauseOverlay onResume={handleResume} onQuit={handleQuit} />
       )}
 
       {gameState === GameState.MENU && (
         <GameMenu 
-            highScore={highScore}
-            p1ColorIdx={p1ColorIdx}
-            p2ColorIdx={p2ColorIdx}
-            setP1ColorIdx={setP1ColorIdx}
-            setP2ColorIdx={setP2ColorIdx}
+            highScore={engine.highScore}
+            p1ColorIdx={p1ColorIdx} p2ColorIdx={p2ColorIdx}
+            setP1ColorIdx={setP1ColorIdx} setP2ColorIdx={setP2ColorIdx}
             onStartSolo={handleStartSolo}
-            onStartCoop={handleStartCoop}
-            onOpenGallery={() => setGameState(GameState.GALLERY)}
+            onStartCoop={handleStartCoop} 
+            onOpenGallery={() => setShowBestiary(true)}
         />
-      )}
-
-      {gameState === GameState.GALLERY && (
-        <BossBestiary onClose={() => setGameState(GameState.MENU)} />
       )}
 
       {gameState === GameState.GAME_OVER && (
-        <GameOverOverlay 
+        <GameOverOverlay score={score} onRestart={handleRestart} />
+      )}
+
+      {gameState === GameState.LEVEL_COMPLETE && (
+        <LevelCompleteOverlay 
+            sector={mapIdx + 1} 
             score={score} 
-            onRestart={handleRestart} 
+            onNextLevel={handleNextLevel} 
         />
+      )}
+
+      {showBestiary && (
+        <BossBestiary onClose={() => setShowBestiary(false)} />
       )}
     </div>
   );

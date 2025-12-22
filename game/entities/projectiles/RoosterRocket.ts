@@ -4,17 +4,18 @@ import { Vector2, WeaponType } from '../../../types';
 import { GameEngine } from '../../GameEngine';
 import { Enemy } from '../Chicken';
 import { CANVAS_HEIGHT } from '../../../constants';
+import * as PIXI from 'pixi.js';
 
 export class RoosterRocket extends Projectile {
     private target: Enemy | null = null;
     private angle: number;
     private speed: number;
     private turnSpeed: number = 2.8;
-    private phase: 'SWERVE' | 'HOMING' | 'BOOST' = 'SWERVE';
+    public phase: 'SWERVE' | 'HOMING' | 'BOOST' = 'SWERVE';
     private targetScanTimer: number = 0;
     private maxLife: number = 1.5; 
     
-    private trail: Vector2[] = [];
+    public trail: Vector2[] = [];
     private maxTrailLength: number = 18; 
 
     constructor(pos: Vector2, vel: Vector2, damage: number, color: string, ownerId: string) {
@@ -150,15 +151,6 @@ export class RoosterRocket extends Projectile {
         ctx.restore();
     }
 
-    /**
-     * Vẽ một cánh đơn (Fin) hình tam giác cụt
-     * @param ctx Context
-     * @param x Gốc tọa độ X
-     * @param y Gốc tọa độ Y
-     * @param width Chiều rộng cánh
-     * @param height Chiều dài cánh (vươn ra ngoài)
-     * @param pos Vị trí: 'left', 'right', 'top', 'bottom'
-     */
     private drawSingleFin(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, pos: string) {
         ctx.save();
         ctx.translate(x, y);
@@ -180,14 +172,12 @@ export class RoosterRocket extends Projectile {
             ctx.lineTo(height, slant + 10);
             ctx.lineTo(0, 8);
         } else if (pos === 'top') {
-            // Cánh dọc (vây lưng) - vẽ như một hình chữ nhật hẹp nghiêng perspective
             ctx.fillStyle = '#94a3b8';
             ctx.moveTo(-2, 0);
             ctx.lineTo(-1, -height);
             ctx.lineTo(1, -height);
             ctx.lineTo(2, 0);
         } else if (pos === 'bottom') {
-            // Cánh bụng - khuất một phần
             ctx.fillStyle = '#334155';
             ctx.moveTo(-2, 0);
             ctx.lineTo(-3, height);
@@ -199,7 +189,6 @@ export class RoosterRocket extends Projectile {
         ctx.fill();
         ctx.stroke();
         
-        // Thêm một chút highlight cho cánh trên
         if (pos === 'top') {
             ctx.strokeStyle = 'rgba(255,255,255,0.4)';
             ctx.lineWidth = 1;
@@ -248,8 +237,78 @@ export class RoosterRocket extends Projectile {
         ctx.fill();
     }
 
+    /**
+     * Đồng bộ hóa hình ảnh sang PixiJS dựa trên các giá trị và phương thức vẽ mới
+     */
+    renderPixi(view: any, time: number) {
+        const r = this.radius;
+        const w = r * 1.15;
+        const h = r * 2.8;
+        const isBoost = this.phase === 'BOOST';
+        const baseColor = isBoost ? 0xfde047 : 0xf97316;
+
+        // 1. Ribbon Trail
+        if (this.trail.length > 1) {
+            const rot = view.rotation;
+            const cos = Math.cos(-rot);
+            const sin = Math.sin(-rot);
+            
+            for (let i = 0; i < this.trail.length - 1; i++) {
+                const ratio = 1 - (i / this.trail.length);
+                const p1 = this.trail[i];
+                const p2 = this.trail[i+1];
+                const l1 = {
+                    x: (p1.x - this.position.x) * cos - (p1.y - this.position.y) * sin,
+                    y: (p1.x - this.position.x) * sin + (p1.y - this.position.y) * cos
+                };
+                const l2 = {
+                    x: (p2.x - this.position.x) * cos - (p2.y - this.position.y) * sin,
+                    y: (p2.x - this.position.x) * sin + (p2.y - this.position.y) * cos
+                };
+                
+                view.trail.moveTo(l1.x, l1.y).lineTo(l2.x, l2.y).stroke({
+                    width: r * 0.9 * ratio,
+                    color: baseColor,
+                    alpha: 0.5 * ratio,
+                    cap: 'round'
+                });
+                view.trail.moveTo(l1.x, l1.y).lineTo(l2.x, l2.y).stroke({
+                    width: r * 0.3 * ratio,
+                    color: 0xffffff,
+                    alpha: 0.3 * ratio,
+                    cap: 'round'
+                });
+            }
+        }
+
+        // 2. Jet Fire
+        const fireLen = (isBoost ? 45 : 22) + Math.random() * 18;
+        const fireWidth = w * (isBoost ? 1.1 : 0.75);
+        view.glow.moveTo(-fireWidth/2, h/2).lineTo(0, h/2 + fireLen).lineTo(fireWidth/2, h/2).fill(baseColor);
+        view.glow.circle(0, h/2, fireWidth * 0.8).fill({ color: 0xffffff, alpha: 0.4 });
+
+        // 3. Fins (Vẽ theo thứ tự: Bottom -> Sides -> Body -> Top)
+        const slant = 12;
+        // Bottom Fin
+        view.main.moveTo(-2, h/2 - 4).lineTo(-3, h/2 - 4 + 18).lineTo(3, h/2 - 4 + 18).lineTo(2, h/2 - 4).fill(0x334155).stroke({ width: 2, color: 0x0f172a });
+        // Left Fin
+        view.main.moveTo(-w/2, h/2 - 8).lineTo(-w/2 - 20, h/2 - 8 + slant).lineTo(-w/2 - 20, h/2 - 8 + slant + 10).lineTo(-w/2, h/2 - 8 + 8).fill(0x475569).stroke({ width: 2.5, color: 0x0f172a });
+        // Right Fin
+        view.main.moveTo(w/2, h/2 - 8).lineTo(w/2 + 20, h/2 - 8 + slant).lineTo(w/2 + 20, h/2 - 8 + slant + 10).lineTo(w/2, h/2 - 8 + 8).fill(0x475569).stroke({ width: 2.5, color: 0x0f172a });
+
+        // 4. Body
+        view.main.roundRect(-w/2, -h/2, w, h, 6).fill(0x94a3b8).stroke({ width: 3.5, color: 0x0f172a });
+        // Nose
+        view.main.moveTo(-w/2, -h/2 + 5).lineTo(0, -h/2 - 22).lineTo(w/2, -h/2 + 5).closePath().fill(0xef4444).stroke({ width: 3, color: 0x0f172a });
+        
+        // 5. Top Fin
+        view.extra.moveTo(-2, h/2 - 12).lineTo(-1, h/2 - 12 - 24).lineTo(1, h/2 - 12 - 24).lineTo(2, h/2 - 12).fill(0x94a3b8).stroke({ width: 2.5, color: 0x0f172a });
+        // Mech detail line
+        view.extra.moveTo(-w/2, 0).lineTo(w/2, 0).stroke({ width: 1, color: 0xffffff, alpha: 0.2 });
+    }
+
     onImpact(engine: GameEngine, impactPos: Vector2) {
         this.isDead = true;
-        engine.createRocketExplosion(impactPos, this.damage);
+        engine.createExplosion(impactPos, this.damage, 120);
     }
 }

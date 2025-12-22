@@ -1,524 +1,301 @@
 
-import { 
-    Player, Enemy, Boss, BossChickenKing, BossMagmaRooster, 
-    Particle, PowerUp, BackgroundEntity, Explosion, Projectile, 
-    EggBlasterBullet, PhotonLaser, FeatherShotgunBullet, 
-    HelixDNAProjectile, RoosterRocket 
-} from './Entities';
-import { GameState, GameMode, InputState, Vector2, ZoneType, WeaponType, PowerUpType, MapPhase, EnemyType, EnemyState, PlayerState } from '../types';
-import { 
-  CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAX_WEAPON_LEVEL, MAP_PROGRESSION, PLAYER_SIZE
-} from '../constants';
+import { WorldContext } from './WorldContext';
+import { GameSystem, MovementSystem, CombatSystem, CollisionSystem, CullingSystem } from './systems';
+import { GameState, GameMode, InputState, ZoneType, PlayerState, MapOrientation, MapDefinition, Vector2, MapPhase, EnemyType } from '../types';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, COLORS, MAP_PROGRESSION } from '../constants';
 import { audio } from '../services/AudioSynthesizer';
-import { WeaponSystem } from './WeaponSystem';
-import { SpawnController, WaveData } from './SpawnController';
+import { Player, BossMother, BossChickenKing, BossMagmaRooster, BackgroundEntity, Particle, Explosion, Enemy } from './Entities';
+import { SpawnController } from './SpawnController';
+import { MapRenderer } from './world/MapSystem';
+import { PixiRenderer } from './PixiRenderer';
 
 export class GameEngine {
-  gameState: GameState = GameState.MENU;
-  gameMode: GameMode = GameMode.OFFLINE_SOLO;
-  currentMapIndex: number = 0;
-  currentPhase: MapPhase = MapPhase.NORMAL;
-  score: number = 0;
-  highScore: number = 0;
-  
-  worldScale: number = 1.0;
-  targetScale: number = 1.0;
-
-  players: Map<string, Player> = new Map();
-  localPlayerIds: string[] = [];
-  bullets: Projectile[] = [];
-  enemies: Enemy[] = [];
-  boss: Boss | null = null;
-  particles: Particle[] = [];
-  powerups: PowerUp[] = [];
-  explosions: Explosion[] = [];
-  backgroundEntities: BackgroundEntity[] = [];
-
-  fireTimer: Map<string, number> = new Map();
-  phaseTimer: number = 0;
-  screenShake: number = 0;
-  comboCount: number = 0;
-  comboTimer: number = 0;
-
+  public ctx: WorldContext;
+  private systems: GameSystem[] = [];
+  private mapRenderer = new MapRenderer();
   private spawnController: SpawnController | null = null;
-  private waveDelayTimer: number = 0;
-  private nextWaveData: WaveData | null = null;
-  private isHinting: boolean = false;
-
-  p1Colors = { primary: COLORS.p1Primary, glow: COLORS.p1Glow };
-  p2Colors = { primary: COLORS.p2Primary, glow: COLORS.p2Glow };
+  private pixiRenderer = PixiRenderer.getInstance();
 
   constructor() {
-    this.localPlayerIds = ['p1'];
-    const saved = localStorage.getItem('neon_swarm_highscore');
-    if (saved) this.highScore = parseInt(saved, 10);
+    this.ctx = new WorldContext();
+    this.systems = [
+        new MovementSystem(),
+        new CombatSystem(),
+        new CollisionSystem(),
+        new CullingSystem()
+    ];
   }
 
-  togglePause() {
-    if (this.gameState === GameState.PLAYING) this.gameState = GameState.PAUSED;
-    else if (this.gameState === GameState.PAUSED) this.gameState = GameState.PLAYING;
+  get gameState() { return this.ctx.gameState; }
+  set gameState(v: GameState) { this.ctx.gameState = v; }
+  get score() { return this.ctx.score; }
+  get highScore() { return this.ctx.highScore; }
+  get currentMapIndex() { return this.ctx.currentMapIndex; }
+  get currentVersion() { return this.ctx.currentVersion; }
+  get players() { return this.ctx.players; }
+  get worldScale() { return this.ctx.worldScale; }
+  get backgroundEntities() { return this.ctx.backgroundEntities; }
+  get enemies() { return this.ctx.enemies; }
+  get boss() { return this.ctx.boss; }
+  get bullets() { return this.ctx.bullets; }
+  get powerups() { return this.ctx.powerups; }
+  get particles() { return this.ctx.particles; }
+  get explosions() { return this.ctx.explosions; }
+  get screenShake() { return this.ctx.screenShake; }
+  set screenShake(v: number) { this.ctx.screenShake = v; }
+
+  async initRenderer() {
+    await this.pixiRenderer.init();
   }
 
-  startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0, p1Config?: any, p2Config?: any) {
-    if (p1Config) this.p1Colors = p1Config;
-    if (p2Config) this.p2Colors = p2Config;
-    this.gameState = GameState.PLAYING;
-    this.currentMapIndex = mapIndex;
-    this.currentPhase = MapPhase.NORMAL;
-    this.phaseTimer = 0;
-    this.score = 0;
-    this.comboCount = 0;
-    this.comboTimer = 0;
-    this.updateTargetScale();
-    this.worldScale = this.targetScale; 
-    this.setupPlayers(mode);
-    this.setupMap();
-    audio.init();
+  cleanup() {
+    this.ctx.reset();
   }
 
-  private updateTargetScale() {
-    this.targetScale = 1.0 / (1.0 + this.currentMapIndex * 0.12);
+  reset() {
+    this.ctx.reset();
   }
 
-  dispose() {
-    this.gameState = GameState.MENU;
-    this.bullets = []; this.enemies = []; this.particles = [];
-    this.powerups = []; this.explosions = []; this.backgroundEntities = [];
-    this.players.clear(); this.fireTimer.clear();
-    this.boss = null; this.score = 0; this.screenShake = 0;
-    this.spawnController = null; this.nextWaveData = null; this.isHinting = false;
-  }
-
-  private setupMap() {
-    this.updateTargetScale();
-    this.initEnvironment();
-    const map = MAP_PROGRESSION[this.currentMapIndex];
-    this.spawnController = new SpawnController(map.zone, this.currentMapIndex);
-    this.waveDelayTimer = 1.5;
-    this.nextWaveData = null;
-    this.isHinting = false;
-    this.players.forEach(p => {
-        p.radius = PLAYER_SIZE * this.targetScale;
-        p.invulnerableTime = 2.0; 
-    });
-  }
-
-  private setupPlayers(mode: GameMode) {
-    this.gameMode = mode;
-    this.players.clear();
-    this.localPlayerIds = mode === GameMode.OFFLINE_COOP ? ['p1', 'p2'] : ['p1'];
-    this.localPlayerIds.forEach((id, idx) => {
-      const x = mode === GameMode.OFFLINE_COOP ? (idx === 0 ? CANVAS_WIDTH/3 : 2*CANVAS_WIDTH/3) : CANVAS_WIDTH/2;
-      const config = id === 'p1' ? this.p1Colors : this.p2Colors;
-      const p = new Player(x, CANVAS_HEIGHT - 100, id, config.primary, config.glow);
-      p.radius = PLAYER_SIZE * this.worldScale;
-      this.players.set(id, p);
-      this.fireTimer.set(id, 0);
-    });
-  }
-
-  initEnvironment() {
-    this.backgroundEntities = [];
-    const map = MAP_PROGRESSION[this.currentMapIndex];
-    const density = 60 + this.currentMapIndex * 20; 
-    for(let i=0; i<density; i++) {
-        let color = '#ffffff22';
-        if (map.zone === ZoneType.VOLCANO) color = '#f9731644';
-        if (map.zone === ZoneType.CYBER) color = '#22d3ee33';
-        if (map.zone === ZoneType.ICE) color = '#ffffff55';
-        
-        this.backgroundEntities.push(new BackgroundEntity(
-            {x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT},
-            {x: 0, y: (80 + Math.random() * 250)}, 
-            (1 + Math.random() * 3) / this.worldScale, 
-            color
-        ));
-    }
-  }
-
-  update(dt: number, input: InputState) {
-    if (this.gameState !== GameState.PLAYING) return;
-
-    if (Math.abs(this.worldScale - this.targetScale) > 0.001) {
-        this.worldScale += (this.targetScale - this.worldScale) * dt * 2;
-    }
-
-    this.phaseTimer += dt;
-    this.updatePhases();
-
-    if (this.comboTimer > 0) {
-      this.comboTimer -= dt;
-      if (this.comboTimer <= 0) this.comboCount = 0;
-    }
-
-    this.localPlayerIds.forEach(id => {
-        const p = this.players.get(id);
-        const pInput = id === 'p2' ? input.p2 : input.p1;
-        if (p && p.state !== PlayerState.DEAD) {
-            p.radius = PLAYER_SIZE * this.worldScale; 
-            p.handleInput(dt, pInput, MAP_PROGRESSION[this.currentMapIndex].zone);
-            p.update(dt);
-            if (p.state === PlayerState.ALIVE) this.handleShooting(p, dt, pInput);
-        }
-    });
-
-    if (this.currentPhase !== MapPhase.BOSS && this.spawnController) {
-      if (this.enemies.length === 0) {
-        if (!this.nextWaveData) {
-            this.nextWaveData = this.spawnController.prepareNextWave(this.worldScale);
-            this.waveDelayTimer = 1.8;
-            this.isHinting = true;
-        } else {
-            this.waveDelayTimer -= dt;
-            if (this.waveDelayTimer <= 0) {
-                this.enemies = this.spawnController.spawnEnemiesFromSlots(this.nextWaveData.slots, this.worldScale);
-                this.nextWaveData = null;
-                this.isHinting = false;
-            }
-        }
-      }
-    } else if (this.boss) {
-        this.boss.updateWithEngine(dt, this);
-    }
-
-    this.bullets.forEach(b => {
-        if (b instanceof RoosterRocket) (b as RoosterRocket).updateWithEngine(dt, this);
-        else b.update(dt);
-    });
-
-    this.explosions.forEach(exp => exp.update(dt));
-    this.enemies.forEach(e => {
-        e.update(dt);
-        if (e.state !== EnemyState.ENTRY && e.shootTimer <= 0) {
-            const bullet = new EggBlasterBullet({x: e.position.x, y: e.position.y + 20}, {x: 0, y: 550}, 1, 'enemy', true);
-            bullet.radius *= this.worldScale;
-            this.bullets.push(bullet);
-            e.shootTimer = 4 + Math.random() * 8;
-        }
-    });
-    
-    this.particles.forEach(p => p.update(dt));
-    this.powerups.forEach(p => p.update(dt));
-    this.backgroundEntities.forEach(b => {
-        b.update(dt);
-        if (b.position.y > CANVAS_HEIGHT) b.position.y = -20;
-    });
-
-    this.checkCollisions(dt);
-    this.cullEntities();
-
-    if (this.screenShake > 0) this.screenShake = Math.max(0, this.screenShake - dt * 40);
-    if (this.localPlayerIds.every(id => this.players.get(id)?.state === PlayerState.DEAD)) {
-        this.gameState = GameState.GAME_OVER;
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('neon_swarm_highscore', this.highScore.toString());
-        }
-    }
-  }
-
-  private updatePhases() {
-      if (this.currentPhase === MapPhase.NORMAL && this.phaseTimer > 120) this.currentPhase = MapPhase.ELITE;
-      else if (this.currentPhase === MapPhase.ELITE && this.phaseTimer > 240) {
-          this.currentPhase = MapPhase.BOSS;
-          this.spawnBoss();
-      }
-  }
-
-  private spawnBoss() {
-      const map = MAP_PROGRESSION[this.currentMapIndex];
-      const themeColors = ['#22d3ee', '#f97316', '#22c55e', '#ffffff', '#a855f7', '#10b981', '#fb7185', '#fbbf24', '#f87171', '#ffffff'];
-      const themeColor = themeColors[this.currentMapIndex % themeColors.length];
-      const pos = { x: CANVAS_WIDTH / 2, y: -400 };
-      const hp = 1000 * Math.pow(1.7, this.currentMapIndex);
-
-      // FACTORY PATTERN: Chọn class Boss dựa trên map index
-      if (this.currentMapIndex === 1) { // Map 2: Magma Rooster
-          this.boss = new BossMagmaRooster(pos, hp, map.bossName, map.zone, themeColor);
-      } else {
-          // Mặc định hoặc Map 1
-          this.boss = new BossChickenKing(pos, hp, map.bossName, map.zone, themeColor);
-      }
-      
-      this.boss.radius *= this.worldScale * 1.6; 
-      audio.playPowerup();
-  }
-
-  private handleShooting(p: Player, dt: number, input: any) {
-    let timer = this.fireTimer.get(p.id) || 0;
-    timer -= dt;
-
-    if (input.shooting && timer <= 0 && !p.isOverheated) {
-      const newProjectiles = WeaponSystem.fire(p.position.x, p.position.y, p.weaponType, p.weaponLevel, p.id, p.primaryColor);
-      newProjectiles.forEach(proj => {
-          proj.radius *= this.worldScale; 
-          if (proj instanceof EggBlasterBullet && this.comboCount >= 3) proj.isPoweredUp = true;
-      });
-      this.bullets.push(...newProjectiles);
-      audio.playShoot();
-      
-      const heatGain = WeaponSystem.getOverloadPerShot(p.weaponType, p.weaponLevel);
-      p.overloadValue += heatGain;
-      
-      if (p.overloadValue >= 100) {
-          p.overloadValue = 100;
-          p.isOverheated = true;
-          audio.playExplosion();
-      }
-
-      timer = WeaponSystem.getFireRate(p.weaponType, p.weaponLevel);
-    }
-    this.fireTimer.set(p.id, timer);
-  }
-
-  private checkCollisions(dt: number) {
-    this.bullets.forEach(b => {
-      if (!b.isEnemy) {
-        this.enemies.forEach(e => {
-          if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(b, e)) {
-            b.onImpact(this, e.position); 
-            let finalDamage = b.damage;
-            if (e.type === EnemyType.ARMORED) finalDamage *= 0.8;
-            e.hp -= finalDamage; e.hit();
-            if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
-          }
-        });
-        if (this.boss && this.isColliding(b, this.boss)) {
-            b.onImpact(this, b.position);
-            if (this.boss.isVulnerable) {
-                this.boss.hp -= b.damage; this.boss.hit();
-                if (this.boss.hp <= 0) this.winMap();
-            } else {
-                this.spawnParticles(b.position, this.boss.themeColor, 5); audio.playHit();
-            }
-        }
-      } else {
-        this.players.forEach(p => {
-          if (p.state === PlayerState.ALIVE && p.invulnerableTime <= 0 && this.isColliding(b, p)) {
-            b.onImpact(this, p.position); this.playerHit(p);
-          }
-        });
-      }
-    });
-
-    this.players.forEach(p => {
-        if (p.state === PlayerState.ALIVE && p.invulnerableTime <= 0) {
-            this.enemies.forEach(e => {
-                if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(p, e)) {
-                    this.playerHit(p);
-                    e.hp = 0; e.isDead = true; this.killEnemy(e);
-                }
-            });
-            if (this.boss && !this.boss.isDead && this.isColliding(p, this.boss)) {
-                this.playerHit(p);
-                p.position.y += 100;
-                p.velocity.y = 800;
-            }
-        }
-    });
-
-    this.explosions.forEach(exp => {
-        this.enemies.forEach(e => {
-            if (e.state !== EnemyState.ENTRY && !e.isDead && this.isColliding(exp, e)) {
-                if (exp.isBurning) { e.hp -= exp.damage * dt; if (Math.random() < 0.1) e.hit(); }
-                else if (!exp.damagedEnemies.has(e)) { e.hp -= exp.damage; e.hit(); exp.damagedEnemies.add(e); }
-                if (e.hp <= 0) { e.isDead = true; this.killEnemy(e); }
-            }
-        });
-    });
-
-    this.powerups.forEach(pu => {
-      this.players.forEach(p => {
-        if (p.state === PlayerState.ALIVE && !pu.isDead && this.isColliding(p, pu)) {
-          pu.isDead = true; this.collectPowerup(p, pu);
-        }
-      });
-    });
-  }
-
-  public createExplosion(pos: Vector2, damage: number, radius: number) {
-      this.explosions.push(new Explosion({...pos}, radius * this.worldScale, damage));
-      this.screenShake = Math.max(this.screenShake, 30);
-      audio.playExplosion();
-      this.spawnParticles(pos, '#f97316', 20, 2.0);
-  }
-
-  public createRocketExplosion(pos: Vector2, damage: number) {
-      const impact = new Explosion({...pos}, 220 * this.worldScale, damage, '#ffffff');
-      impact.maxLife = 0.4; impact.life = 0.4;
-      this.explosions.push(impact);
-      const burn = new Explosion({...pos}, 200 * this.worldScale, damage * 0.25, '#f97316');
-      burn.isBurning = true; burn.maxLife = 1.5; burn.life = 1.5;
-      this.explosions.push(burn);
-      audio.playExplosion();
-      this.spawnParticles(pos, '#64748b', 30, 0.8);
-  }
-
-  public spawnPiercingRing(pos: Vector2, color: string) {
-      const ring = new Explosion({...pos}, 100 * this.worldScale, 0, color);
-      ring.maxLife = 0.2; ring.life = 0.2;
-      this.explosions.push(ring);
-  }
-
-  public triggerChainResonance(pos: Vector2, damage: number, color: string) {
-      const radius = 220 * this.worldScale; let target: Enemy | null = null; let minDist = radius;
-      this.enemies.forEach(e => {
-          if (e.isDead) return;
-          const d = Math.hypot(e.position.x - pos.x, e.position.y - pos.y);
-          if (d < minDist) { minDist = d; target = e; }
-      });
-      if (target) { target.hp -= damage; target.hit(); this.spawnParticles(target.position, color, 3, 5.0); audio.playHit(); }
-  }
-
-  private winMap() {
-      this.boss = null;
-      this.score += 50000 * (this.currentMapIndex + 1);
-      audio.playPowerup();
-      this.currentMapIndex++;
-      if (this.currentMapIndex >= MAP_PROGRESSION.length) {
-          this.gameState = GameState.LEVEL_COMPLETE;
-      } else {
-          this.setupMap();
-          this.currentPhase = MapPhase.NORMAL;
-          this.phaseTimer = 0;
-      }
-  }
-
-  private isColliding(a: any, b: any) {
-    const dx = a.position.x - b.position.x;
-    const dy = a.position.y - b.position.y;
-    return Math.sqrt(dx*dx + dy*dy) < (a.radius + b.radius);
-  }
-
-  private killEnemy(e: Enemy) {
-    this.score += e.scoreValue; this.comboCount++; this.comboTimer = 1.2;
-    audio.playExplosion();
-    this.spawnParticles(e.position, e.color, 25, 2.5);
-    
-    if (Math.random() < 0.25) {
-        const r = Math.random();
-        let kind = PowerUpType.WEAPON;
-        if (r < 0.25) kind = PowerUpType.HEART; 
-        else if (r < 0.5) kind = PowerUpType.POWER_BOOST; 
-        const pu = new PowerUp({...e.position}, kind);
-        pu.radius *= this.worldScale;
-        this.powerups.push(pu);
-    }
-  }
-
-  private playerHit(p: Player) {
-      p.lives--; this.screenShake = 60; audio.playExplosion();
-      this.spawnParticles(p.position, p.glowColor, 60, 2.0);
-      this.spawnParticles(p.position, '#ffffff', 20, 3.0);
-      p.applyDeathPenalty();
-      if (p.lives > 0) this.respawnPlayer(p);
-      else p.state = PlayerState.DEAD;
-  }
-
-  private respawnPlayer(p: Player) {
-      p.state = PlayerState.RESPAWNING;
-      p.respawnTimer = 1.5; 
-      p.position.x = CANVAS_WIDTH / 2;
-      p.position.y = CANVAS_HEIGHT + 150;
-      p.velocity.x = 0; p.velocity.y = 0;
-      p.invulnerableTime = 3.0; 
-  }
-
-  private collectPowerup(p: Player, pu: PowerUp) {
-    audio.playPowerup();
-    if (pu.kind === PowerUpType.HEART) p.lives++; 
-    else if (pu.kind === PowerUpType.POWER_BOOST) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
-    else {
-        if (p.weaponType === pu.weaponType) p.weaponLevel = Math.min(MAX_WEAPON_LEVEL, p.weaponLevel + 1);
-        else p.weaponType = pu.weaponType;
-    }
-  }
-
-  spawnParticles(pos: Vector2, color: string, count: number, decay: number = 2.5) {
+  spawnParticles(pos: Vector2, color: string, count: number, speed: number) {
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 400;
-      const particle = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 5.0 * this.worldScale, decay);
-      this.particles.push(particle);
+        const angle = Math.random() * Math.PI * 2;
+        const vel = { 
+            x: Math.cos(angle) * speed * (0.5 + Math.random()), 
+            y: Math.sin(angle) * speed * (0.5 + Math.random()) 
+        };
+        this.ctx.particles.push(new Particle({...pos}, vel, color, 2 + Math.random() * 3, 1 + Math.random()));
     }
   }
 
   spawnVortexParticles(pos: Vector2, color: string, count: number) {
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = 100 + Math.random() * 200;
-        const p = new Particle({...pos}, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed }, color, 3.5 * this.worldScale, 3.5);
-        p.velocity.x += Math.sin(angle) * 120; p.velocity.y += Math.cos(angle) * 120;
-        this.particles.push(p);
+        const vel = { 
+            x: Math.cos(angle) * 150, 
+            y: Math.sin(angle) * 150 
+        };
+        this.ctx.particles.push(new Particle({...pos}, vel, color, 4, 2));
     }
   }
 
-  cullEntities() {
-    this.bullets = this.bullets.filter(b => !b.isDead && b.position.y > -100 && b.position.y < CANVAS_HEIGHT + 100);
-    this.enemies = this.enemies.filter(e => !e.isDead && e.position.y < CANVAS_HEIGHT + 150);
-    this.explosions = this.explosions.filter(exp => !exp.isDead);
-    this.particles = this.particles.filter(p => !p.isDead);
-    this.powerups = this.powerups.filter(p => !p.isDead);
+  spawnPiercingRing(pos: Vector2, color: string) {
+    for (let i = 0; i < 20; i++) {
+        const angle = (i / 20) * Math.PI * 2;
+        const vel = { 
+            x: Math.cos(angle) * 400, 
+            y: Math.sin(angle) * 400 
+        };
+        this.ctx.particles.push(new Particle({...pos}, vel, color, 2, 3));
+    }
   }
 
-  stopGame() { this.gameState = GameState.MENU; }
-
-  draw(ctx: CanvasRenderingContext2D) {
-    const map = MAP_PROGRESSION[this.currentMapIndex];
-    ctx.fillStyle = map.bgColor; ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    this.drawZoneAtmosphere(ctx, map.zone, true);
-    ctx.save();
-    if (this.screenShake > 0) ctx.translate((Math.random()-0.5)*this.screenShake, (Math.random()-0.5)*this.screenShake);
-    if (this.isHinting && this.nextWaveData) this.drawFormationHint(ctx, this.nextWaveData.slots);
-    this.backgroundEntities.forEach(b => b.draw(ctx));
-    this.powerups.forEach(p => p.draw(ctx));
-    this.enemies.forEach(e => e.draw(ctx));
-    this.boss?.draw(ctx);
-    this.bullets.forEach(b => b.draw(ctx));
-    this.explosions.forEach(exp => exp.draw(ctx));
-    this.players.forEach(p => p.draw(ctx));
-    ctx.restore();
-    this.drawZoneAtmosphere(ctx, map.zone, false);
+  createExplosion(pos: Vector2, damage: number, radius: number) {
+    const explosion = new Explosion({...pos}, radius, damage);
+    this.ctx.explosions.push(explosion);
   }
 
-  private drawZoneAtmosphere(ctx: CanvasRenderingContext2D, zone: ZoneType, isBottom: boolean) {
-      if (isBottom) {
-          if (zone === ZoneType.CYBER) {
-              ctx.strokeStyle = 'rgba(34, 211, 238, 0.1)';
-              ctx.lineWidth = 1;
-              const spacing = 100 * this.worldScale;
-              for (let x = 0; x < CANVAS_WIDTH; x += spacing) {
-                  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_HEIGHT); ctx.stroke();
-              }
-              for (let y = 0; y < CANVAS_HEIGHT; y += spacing) {
-                  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_WIDTH, y); ctx.stroke();
-              }
-          }
+  startGame(mode: GameMode = GameMode.OFFLINE_SOLO, mapIndex: number = 0) {
+    this.ctx.reset();
+    this.ctx.gameState = GameState.PLAYING;
+    this.ctx.currentMapIndex = mapIndex;
+    this.setupPlayers(mode);
+    this.setupMap();
+    audio.init();
+  }
+
+  startNextLevel() {
+    this.ctx.currentMapIndex++;
+    this.ctx.gameState = GameState.PLAYING;
+    this.ctx.mapPhase = MapPhase.NORMAL;
+    this.ctx.waveCount = 0;
+    this.ctx.phaseTimer = 0;
+    
+    // Clear entities but KEEP PLAYERS
+    this.ctx.enemies = [];
+    this.ctx.bullets = [];
+    this.ctx.powerups = [];
+    this.ctx.particles = [];
+    this.ctx.explosions = [];
+    this.ctx.boss = null;
+    
+    // Position players for next level
+    const playersArr = Array.from(this.ctx.players.values());
+    playersArr.forEach((p, i) => {
+        p.position.x = playersArr.length > 1 ? (CANVAS_WIDTH/2 - 100 + i * 200) : CANVAS_WIDTH/2;
+        p.position.y = CANVAS_HEIGHT - 150;
+        p.state = PlayerState.ALIVE;
+        p.invulnerableTime = 2.0;
+    });
+
+    this.setupMap();
+  }
+
+  private setupMap() {
+    const mapCfg = this.ctx.currentVersion.maps[this.ctx.currentMapIndex];
+    this.ctx.mapPhase = MapPhase.NORMAL;
+    this.ctx.worldScale = mapCfg.orientation !== MapOrientation.UP ? 0.85 : 1.0;
+    
+    const progression = MAP_PROGRESSION[this.ctx.currentMapIndex] || MAP_PROGRESSION[0];
+    this.spawnController = new SpawnController(progression.zone, this.ctx.currentMapIndex);
+    
+    this.spawnNextWave();
+    this.initEnvironment();
+  }
+
+  private spawnNextWave() {
+    if (!this.spawnController) return;
+    
+    if (this.ctx.mapPhase === MapPhase.NORMAL) {
+        const wave = this.spawnController.prepareNextWave(this.ctx.waveCount, this.ctx.worldScale);
+        const newEnemies = this.spawnEnemiesFromSlots(wave.slots, this.ctx.worldScale);
+        this.ctx.enemies.push(...newEnemies);
+        this.ctx.waveCount++;
+    } else if (this.ctx.mapPhase === MapPhase.ELITE) {
+        const wave = this.spawnController.prepareNextWave(10, this.ctx.worldScale);
+        const newEnemies = this.spawnEnemiesFromSlots(wave.slots, this.ctx.worldScale, EnemyType.ELITE);
+        this.ctx.enemies.push(...newEnemies);
+    } else if (this.ctx.mapPhase === MapPhase.BOSS) {
+        this.spawnBoss();
+    }
+  }
+
+  private spawnEnemiesFromSlots(slots: Vector2[], scale: number, forcedType?: EnemyType): Enemy[] {
+    return slots.map(slot => {
+        return this.spawnController!.spawnEnemiesFromSlots([slot], scale, forcedType)[0];
+    });
+  }
+
+  private spawnBoss() {
+      const progression = MAP_PROGRESSION[this.ctx.currentMapIndex];
+      const hp = 5000 + (this.ctx.currentMapIndex * 2500);
+      const pos = { x: CANVAS_WIDTH / 2, y: -200 };
+      
+      if (this.ctx.currentMapIndex === 9) {
+          this.ctx.boss = new BossMother(pos, hp * 2, progression.bossName, progression.zone, "#a855f7");
+      } else if (progression.zone === ZoneType.VOLCANO) {
+          this.ctx.boss = new BossMagmaRooster(pos, hp, progression.bossName, progression.zone, "#ef4444");
       } else {
-          if (zone === ZoneType.VOLCANO) {
-              ctx.fillStyle = 'rgba(239, 68, 68, 0.08)'; 
-              ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-              if (Math.random() < 0.05) this.spawnParticles({x: Math.random() * CANVAS_WIDTH, y: CANVAS_HEIGHT}, '#f97316', 1, 0.5);
-          } else if (zone === ZoneType.ICE) {
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; 
-              ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-              if (Math.random() < 0.1) this.spawnParticles({x: Math.random() * CANVAS_WIDTH, y: 0}, '#ffffff', 1, 1.5);
-          }
+          this.ctx.boss = new BossChickenKing(pos, hp, progression.bossName, progression.zone, "#fbbf24");
       }
   }
 
-  private drawFormationHint(ctx: CanvasRenderingContext2D, slots: Vector2[]) {
+  private setupPlayers(mode: GameMode) {
+    this.ctx.players.clear();
+    const ids = mode === GameMode.OFFLINE_COOP ? ['p1', 'p2'] : ['p1'];
+    ids.forEach((id) => {
+      const p = new Player(
+        id === 'p1' ? CANVAS_WIDTH/2 - 100 : CANVAS_WIDTH/2 + 100, 
+        CANVAS_HEIGHT - 150, 
+        id, 
+        id === 'p1' ? COLORS.p1Primary : COLORS.p2Primary, 
+        id === 'p1' ? COLORS.p1Glow : COLORS.p2Glow
+      );
+      this.ctx.players.set(id, p);
+    });
+  }
+
+  initEnvironment() {
+    this.ctx.backgroundEntities = [];
+    for(let i=0; i<60; i++) {
+        this.ctx.backgroundEntities.push(new BackgroundEntity(
+            {x: Math.random() * CANVAS_WIDTH, y: Math.random() * CANVAS_HEIGHT},
+            {x: 0, y: 100 + Math.random() * 200}, 
+            Math.random() * 2, 
+            'rgba(255,255,255,0.1)'
+        ));
+    }
+  }
+
+  update(dt: number, input: InputState) {
+    if (this.ctx.gameState !== GameState.PLAYING) return;
+
+    this.ctx.updateCombo(dt);
+    this.ctx.phaseTimer += dt;
+    if (this.ctx.displayScore < this.ctx.score) {
+        this.ctx.displayScore += Math.ceil((this.ctx.score - this.ctx.displayScore) * 0.15);
+    }
+
+    this.systems.forEach(system => system.update(this, dt, input));
+
+    if (this.ctx.enemies.length === 0 && !this.ctx.boss) {
+        if (this.ctx.mapPhase === MapPhase.NORMAL) {
+            if (this.ctx.waveCount >= 2) {
+                this.ctx.mapPhase = MapPhase.ELITE;
+                this.spawnNextWave();
+            } else {
+                this.spawnNextWave();
+            }
+        } else if (this.ctx.mapPhase === MapPhase.ELITE) {
+            this.ctx.mapPhase = MapPhase.BOSS;
+            this.spawnNextWave();
+        }
+    }
+
+    if (this.ctx.mapPhase === MapPhase.BOSS && this.ctx.boss && this.ctx.boss.hp <= 0) {
+        this.ctx.addScore(10000 + (this.ctx.currentMapIndex * 5000), this.ctx.boss.position);
+        this.ctx.boss = null;
+        this.winMap();
+    }
+
+    if (Array.from(this.ctx.players.values()).every(pl => pl.lives <= 0)) {
+        this.ctx.gameState = GameState.GAME_OVER;
+    }
+  }
+
+  private winMap() {
+    if (this.ctx.currentMapIndex < this.ctx.currentVersion.maps.length - 1) {
+      this.ctx.gameState = GameState.LEVEL_COMPLETE;
+    } else {
+      this.ctx.gameState = GameState.GAME_OVER;
+    }
+  }
+
+  drawSplit(bgCtx: CanvasRenderingContext2D, hudCtx: CanvasRenderingContext2D) {
+    const mapCfg = this.ctx.currentVersion.maps[this.ctx.currentMapIndex];
+    this.mapRenderer.draw(bgCtx, mapCfg, 1/60);
+    this.pixiRenderer.sync(this);
+    this.ctx.floatingTexts.forEach(ft => ft.draw(hudCtx));
+    this.drawHUD(hudCtx, mapCfg);
+  }
+
+  private drawHUD(ctx: CanvasRenderingContext2D, map: MapDefinition) {
       ctx.save();
-      const pulse = 0.2 + Math.abs(Math.sin(Date.now() / 200)) * 0.3;
-      ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
-      ctx.strokeStyle = `rgba(34, 211, 238, ${pulse})`;
-      ctx.lineWidth = 2;
-      slots.forEach(slot => {
-          ctx.beginPath();
-          ctx.arc(slot.x, slot.y, 15 * this.worldScale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-      });
+      
+      // Combo Display
+      if (this.ctx.combo > 1) {
+          ctx.textAlign = 'center';
+          ctx.font = 'italic 900 64px sans-serif';
+          ctx.fillStyle = this.ctx.combo > 20 ? '#facc15' : '#fff';
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = ctx.fillStyle as string;
+          ctx.fillText(`${this.ctx.combo}x COMBO`, CANVAS_WIDTH / 2, 250);
+          
+          const barW = 300;
+          const ratio = this.ctx.comboTimer / this.ctx.COMBO_MAX_TIME;
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          ctx.fillRect(CANVAS_WIDTH/2 - barW/2, 270, barW, 6);
+          ctx.fillStyle = ctx.fillStyle;
+          ctx.fillRect(CANVAS_WIDTH/2 - barW/2, 270, barW * ratio, 6);
+      }
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`WORLD RECORD: ${this.ctx.highScore.toLocaleString()} PTS`, CANVAS_WIDTH - 60, 60);
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'italic 900 86px sans-serif';
+      ctx.fillText(this.ctx.displayScore.toLocaleString(), CANVAS_WIDTH - 60, 140);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(`MISSION SECTOR ${this.ctx.currentMapIndex + 1}/10`, 60, 60);
+      
+      ctx.fillStyle = '#fff';
+      ctx.font = 'italic 900 72px sans-serif';
+      ctx.fillText(map.name.toUpperCase(), 60, 130);
+      
       ctx.restore();
   }
 }

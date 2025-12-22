@@ -1,3 +1,4 @@
+
 import { InputState, ControlSettings } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../constants';
 
@@ -10,21 +11,21 @@ export class InputHandler {
   private _onKeyDown: (e: KeyboardEvent) => void;
   private _onKeyUp: (e: KeyboardEvent) => void;
   private _onMouseMove: (e: MouseEvent) => void;
-  private _onMouseDown: () => void;
-  private _onMouseUp: () => void;
+  private _onMouseDown: (e: MouseEvent) => void;
+  private _onMouseUp: (e: MouseEvent) => void;
   private _onTouchMove: (e: TouchEvent) => void;
   private _onTouchStart: (e: TouchEvent) => void;
-  private _onTouchEnd: () => void;
+  private _onTouchEnd: (e: TouchEvent) => void;
 
   constructor(private controls: ControlSettings, private canvas: HTMLCanvasElement) {
     this._onKeyDown = (e) => this.handleKey(e.code, true);
     this._onKeyUp = (e) => this.handleKey(e.code, false);
     this._onMouseMove = (e) => this.handleMouse(e);
-    this._onMouseDown = () => this.state.p1.shooting = true;
-    this._onMouseUp = () => this.state.p1.shooting = false;
+    this._onMouseDown = (e) => { this.state.p1.shooting = true; this.handleMouse(e); };
+    this._onMouseUp = () => { this.state.p1.shooting = false; };
     this._onTouchMove = (e) => this.handleTouch(e);
     this._onTouchStart = (e) => this.handleTouch(e);
-    this._onTouchEnd = () => {
+    this._onTouchEnd = (e) => {
         this.state.p1.shooting = false;
         this.state.p1.usePointer = false;
     };
@@ -35,6 +36,7 @@ export class InputHandler {
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keyup', this._onKeyUp);
     
+    // Đính kèm trực tiếp vào canvas để đảm bảo tọa độ chính xác
     this.canvas.addEventListener('mousemove', this._onMouseMove);
     this.canvas.addEventListener('mousedown', this._onMouseDown);
     this.canvas.addEventListener('mouseup', this._onMouseUp);
@@ -47,15 +49,23 @@ export class InputHandler {
   destroy() {
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
-    this.canvas.removeEventListener('mousemove', this._onMouseMove);
-    this.canvas.removeEventListener('mousedown', this._onMouseDown);
-    this.canvas.removeEventListener('mouseup', this._onMouseUp);
-    this.canvas.removeEventListener('touchmove', this._onTouchMove);
-    this.canvas.removeEventListener('touchstart', this._onTouchStart);
-    this.canvas.removeEventListener('touchend', this._onTouchEnd);
+    
+    if (this.canvas) {
+        this.canvas.removeEventListener('mousemove', this._onMouseMove);
+        this.canvas.removeEventListener('mousedown', this._onMouseDown);
+        this.canvas.removeEventListener('mouseup', this._onMouseUp);
+        this.canvas.removeEventListener('touchmove', this._onTouchMove);
+        this.canvas.removeEventListener('touchstart', this._onTouchStart);
+        this.canvas.removeEventListener('touchend', this._onTouchEnd);
+    }
   }
 
   private handleKey(code: string, isDown: boolean) {
+    // Nếu bấm phím di chuyển, tắt chế độ Pointer của P1
+    if (isDown && [this.controls.p1.left, this.controls.p1.right, this.controls.p1.up, this.controls.p1.down].includes(code)) {
+        this.state.p1.usePointer = false;
+    }
+
     if (code === this.controls.p1.left) this.state.p1.left = isDown;
     if (code === this.controls.p1.right) this.state.p1.right = isDown;
     if (code === this.controls.p1.up) this.state.p1.up = isDown;
@@ -81,15 +91,17 @@ export class InputHandler {
   }
 
   private handleTouch(e: TouchEvent) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = CANVAS_WIDTH / rect.width;
     const scaleY = CANVAS_HEIGHT / rect.height;
-    this.state.p1.pointer = {
-        x: (e.touches[0].clientX - rect.left) * scaleX,
-        y: (e.touches[0].clientY - rect.top) * scaleY
-    };
-    this.state.p1.usePointer = true;
-    this.state.p1.shooting = true;
+    if (e.touches.length > 0) {
+        this.state.p1.pointer = {
+            x: (e.touches[0].clientX - rect.left) * scaleX,
+            y: (e.touches[0].clientY - rect.top) * scaleY
+        };
+        this.state.p1.usePointer = true;
+        this.state.p1.shooting = true;
+    }
   }
 }

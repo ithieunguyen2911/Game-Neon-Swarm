@@ -49,7 +49,8 @@ export class Enemy extends Entity {
     this.entryProgress = 0;
     this.state = EnemyState.ENTRY;
     this.opacity = 0.35;
-    this.entryCurveAmp = (Math.random() - 0.5) * 300; 
+    // Giới hạn độ cong để không bay quá xa khỏi màn hình lúc mới vào
+    this.entryCurveAmp = (Math.random() - 0.5) * 200; 
   }
 
   private easeOutCubic(t: number): number {
@@ -83,10 +84,14 @@ export class Enemy extends Entity {
         break;
 
       case EnemyState.FORMATION:
-        const wobbleX = Math.sin(this.stateTimer * 1.2) * 12;
-        const wobbleY = Math.cos(this.stateTimer * 1.5) * 6;
+        const wobbleX = Math.sin(this.stateTimer * 1.2) * 15;
+        const wobbleY = Math.cos(this.stateTimer * 1.5) * 8;
         this.position.x = this.formationPos.x + wobbleX;
         this.position.y = this.formationPos.y + wobbleY;
+        
+        // Đảm bảo gà luôn ở trong màn hình chơi khi đang ở đội hình
+        this.position.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.position.x));
+        
         if (Math.random() < 0.0003) {
           this.state = EnemyState.DIVE;
           this.diveTimer = 0;
@@ -94,8 +99,8 @@ export class Enemy extends Entity {
         break;
 
       case EnemyState.DIVE:
-        this.velocity.y = 550;
-        this.velocity.x = Math.sin(this.diveTimer * 4) * 180;
+        this.velocity.y = 580;
+        this.velocity.x = Math.sin(this.diveTimer * 4) * 200;
         this.diveTimer += dt;
         this.position.x += this.velocity.x * dt;
         this.position.y += this.velocity.y * dt;
@@ -112,9 +117,11 @@ export class Enemy extends Entity {
         if (dist < 15) {
           this.state = EnemyState.FORMATION;
         } else {
-          this.position.x += (rdx / dist) * 450 * dt;
-          this.position.y += (rdy / dist) * 450 * dt;
+          this.position.x += (rdx / dist) * 500 * dt;
+          this.position.y += (rdy / dist) * 500 * dt;
         }
+        // Giới hạn X để không bị bay tuốt ra ngoài khi đang quay về
+        this.position.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.position.x));
         break;
     }
   }

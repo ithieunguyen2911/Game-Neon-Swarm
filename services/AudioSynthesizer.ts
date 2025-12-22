@@ -23,6 +23,12 @@ class AudioSynthesizer {
     }
   }
 
+  suspend() {
+    if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend();
+    }
+  }
+
   toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     localStorage.setItem('neon_swarm_muted', this.isMuted.toString());
@@ -38,6 +44,7 @@ class AudioSynthesizer {
 
   playShoot() {
     if (!this.ctx || !this.masterGain || this.isMuted) return;
+    if (this.ctx.state !== 'running') this.ctx.resume();
     
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -58,6 +65,7 @@ class AudioSynthesizer {
 
   playExplosion() {
     if (!this.ctx || !this.masterGain || this.isMuted) return;
+    if (this.ctx.state !== 'running') this.ctx.resume();
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -78,6 +86,7 @@ class AudioSynthesizer {
 
   playPowerup() {
     if (!this.ctx || !this.masterGain || this.isMuted) return;
+    if (this.ctx.state !== 'running') this.ctx.resume();
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -99,6 +108,8 @@ class AudioSynthesizer {
 
   playHit() {
     if (!this.ctx || !this.masterGain || this.isMuted) return;
+    if (this.ctx.state !== 'running') this.ctx.resume();
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     

@@ -1,4 +1,5 @@
 
+
 export interface Vector2 {
   x: number;
   y: number;
@@ -11,7 +12,42 @@ export enum GameState {
   LEVEL_COMPLETE = 'LEVEL_COMPLETE',
   GAME_OVER = 'GAME_OVER',
   SETTINGS = 'SETTINGS',
-  GALLERY = 'GALLERY', // Trạng thái xem danh sách Boss
+  GALLERY = 'GALLERY',
+  STORY = 'STORY' // Màn hình hiển thị cốt truyện
+}
+
+export enum MapOrientation {
+  UP = 0,
+  RIGHT = 90,
+  DOWN = 180,
+  LEFT = 270
+}
+
+export interface MapPuzzle {
+  keyItemName: string;
+  requiredCount: number;
+  currentCount: number;
+  hint: string;
+  isResolved: boolean;
+}
+
+// Cấu trúc mới cho Map
+export interface MapDefinition {
+  id: number;
+  name: string;
+  storySnippet: string;
+  bgColor: string;
+  orientation: MapOrientation;
+  puzzle: MapPuzzle;
+  hazardsFrequency: number; // Tần suất xuất hiện vật cản
+  ambientEffect: 'WIND' | 'ASH' | 'CYBER_STATIC' | 'SNOW' | 'NONE';
+}
+
+export interface VersionDefinition {
+  versionId: string;
+  title: string;
+  description: string;
+  maps: MapDefinition[];
 }
 
 export enum PlayerState {
@@ -71,7 +107,8 @@ export enum WeaponType {
 export enum PowerUpType {
   WEAPON = 'WEAPON',
   HEART = 'HEART',
-  POWER_BOOST = 'POWER_BOOST'
+  POWER_BOOST = 'POWER_BOOST',
+  KEY_ITEM = 'KEY_ITEM' // Loại item mới để giải mã map
 }
 
 export interface PlayerInput {
@@ -89,30 +126,18 @@ export interface InputState {
   p2: PlayerInput; 
 }
 
-export interface PlayerKeyMap {
-  up: string;
-  down: string;
-  left: string;
-  right: string;
-  shoot: string;
-}
-
+// Added ControlSettings for constants.ts and InputHandler.ts
 export interface ControlSettings {
-  p1: PlayerKeyMap;
-  p2: PlayerKeyMap;
+  p1: { up: string; down: string; left: string; right: string; shoot: string };
+  p2: { up: string; down: string; left: string; right: string; shoot: string };
 }
 
+// Added NetworkPlayerState for MultiplayerService.ts
 export interface NetworkPlayerState {
   id: string;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  tilt: number;
+  position: Vector2;
+  velocity: Vector2;
+  state: PlayerState;
   weaponType: WeaponType;
   weaponLevel: number;
-  isShooting: boolean;
-  color: string;
-  lives: number;
-  isDead: boolean;
 }

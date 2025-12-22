@@ -9,7 +9,7 @@ export const PLAYER_SIZE = 50;
 export const PLAYER_DRAG = 0.92;
 export const PLAYER_LIVES = 5;
 
-export const BULLET_SPEED = 1200; // Tăng từ 900 -> 1200
+export const BULLET_SPEED = 1200;
 export const FIRE_RATE_BASE = 0.15;
 
 export const ENEMY_SPAWN_RATE_INITIAL = 0.8; 
@@ -17,6 +17,11 @@ export const ENEMY_BASE_SPEED = 150;
 export const ENEMY_SIZE = 55; 
 
 export const MAX_WEAPON_LEVEL = 20;
+
+// Cấu hình tỷ lệ rớt vật phẩm (0.0 -> 1.0)
+export const DROP_CHANCE_NORMAL = 0.35; // 35% cơ hội rớt từ gà thường
+export const DROP_CHANCE_ELITE = 1.0;   // 100% cơ hội rớt từ gà Elite
+export const DROP_CHANCE_BOSS = 3;      // Boss rớt hẳn 3 items
 
 export const COLORS = {
   p1Primary: '#3b82f6', 
@@ -64,11 +69,11 @@ export const MAP_PROGRESSION: MapConfig[] = [
 ];
 
 export const WEAPON_CONFIGS = {
-  BLASTER: { name: "Egg Blaster", fireRate: 0.2, speed: 1400, damage: 10, color: '#38bdf8' }, // Tăng 1100 -> 1400
-  SHOTGUN: { name: "Feather Spreader", fireRate: 0.6, speed: 950, damage: 0.8, color: '#22d3ee' }, // Tăng 700 -> 950
-  HELIX: { name: "DNA Twister", fireRate: 0.1, speed: 850, damage: 0.6, color: '#a855f7' }, // Tăng 600 -> 850
-  ROCKET: { name: "Rooster Rocket", fireRate: 0.8, speed: 650, damage: 5, color: '#f97316' }, // Tăng 500 -> 650
-  LASER: { name: "Photon Beam", fireRate: 0.05, speed: 5000, damage: 2, color: '#22c55e' }, // Tăng 4000 -> 5000
+  BLASTER: { name: "Egg Blaster", fireRate: 0.2, speed: 1400, damage: 10, color: '#38bdf8' }, 
+  SHOTGUN: { name: "Feather Spreader", fireRate: 0.6, speed: 950, damage: 0.8, color: '#22d3ee' }, 
+  HELIX: { name: "DNA Twister", fireRate: 0.1, speed: 850, damage: 0.6, color: '#a855f7' }, 
+  ROCKET: { name: "Rooster Rocket", fireRate: 0.8, speed: 650, damage: 5, color: '#f97316' }, 
+  LASER: { name: "Photon Beam", fireRate: 0.05, speed: 5000, damage: 2, color: '#22c55e' }, 
 };
 
 export const ZONE_CONFIGS = {
